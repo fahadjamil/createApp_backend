@@ -96,10 +96,14 @@ exports.Newproject = async (req, res) => {
 };
 
 // 🔹 Client sync logic (unique by phone + store userId)
+// Accepts both contact* and point* field names from mobile app
 const syncClient = async (data) => {
   try {
-    if (!data.contactNumber) {
-      console.log("⚠️ No phone provided, skipping client sync");
+    // Support both naming conventions: contactNumber OR pointMobile
+    const phone = data.contactNumber || data.pointMobile;
+    
+    if (!phone) {
+      console.log("⚠️ No phone provided (contactNumber/pointMobile), skipping client sync");
       return null;
     }
 
@@ -116,21 +120,23 @@ const syncClient = async (data) => {
     const clientData = {
       fullName: data.clientName || "",
       clientType: data.client || "",
-      company: data.contactBrand || "",
-      email: data.contactEmail || "",
-      phone: data.contactNumber, // ✔ correct phone
+      company: data.contactBrand || data.pointBrand || "",
+      email: data.contactEmail || data.pointEmail || "",
+      phone: phone,
       address: "",
-      contactPersonName: data.contactName || "",
-      contactPersonRole: data.contactRole || "",
+      contactPersonName: data.contactName || data.pointName || "",
+      contactPersonRole: data.contactRole || data.pointRole || "",
       projectId: data.projectId,
-      userId: data.userId, // ✔ save owner userId
+      userId: data.userId,
     };
 
-    // 🔍 Find client by phone (correct lookup)
+    console.log("📋 Client sync data:", JSON.stringify(clientData, null, 2));
+
+    // 🔍 Find client by phone
     let client = await Client.findOne({
       where: {
-        phone: data.contactNumber, // ✔ fixed bug
-        userId: data.userId, // ✔ ensure same user's client
+        phone: phone,
+        userId: data.userId,
       },
     });
 
