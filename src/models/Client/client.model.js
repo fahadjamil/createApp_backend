@@ -14,25 +14,24 @@ module.exports = (sequelize, Sequelize) => {
       // 🧾 Basic Client Info
       fullName: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true, // Made optional for flexibility
       },
       clientType: {
-        type: DataTypes.ENUM("individual", "brand"),
-        allowNull: false,
+        type: DataTypes.STRING, // Changed from ENUM for flexibility
+        allowNull: true,
       },
       company: {
         type: DataTypes.STRING,
       },
       email: {
         type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
-        validate: { isEmail: true },
+        allowNull: true, // Made optional
+        // Removed unique constraint - clients can share email
       },
       phone: {
         type: DataTypes.STRING,
-        allowNull: false,
-        validate: { len: [7, 15] },
+        allowNull: false, // Phone is required for client identification
+        // Removed strict length validation
       },
       address: {
         type: DataTypes.TEXT,
