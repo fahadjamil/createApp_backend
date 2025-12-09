@@ -18,9 +18,14 @@ app.use(express.urlencoded({ extended: true }));
 // ✅ Serve uploaded files (important for images)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-db.sequelize.sync({ alter: true }).then(() => {
-  console.log("Database Connected...");
-});
+// Connect to database (don't use alter in production - it causes issues on serverless)
+db.sequelize.authenticate()
+  .then(() => {
+    console.log("✅ Database Connected...");
+  })
+  .catch((err) => {
+    console.error("❌ Database connection error:", err.message);
+  });
 
 // Import routes
 require("./routes/index")(app);
