@@ -1,18 +1,26 @@
 const clientController = require("../controllers/client.controller");
 
 module.exports = (app) => {
-  // Create client
-  app.post("/api/clients", clientController.createClient);
+  const router = require("express").Router();
 
-  // Get all clients
-  app.get("/api/clients", clientController.getAllClients);
+  // Create client
+  router.post("/new_client", clientController.createClient);
+
+  // Get all clients (POST with userId in body - matching mobile app pattern)
+  router.post("/all_clients", clientController.getClientsByUserPost);
+
+  // Get all clients (admin level)
+  router.get("/all", clientController.getAllClients);
 
   // Get single client by ID
-  app.get("/api/clients/:id", clientController.getClientById);
+  router.get("/:id", clientController.getClientById);
 
   // Update client
-  app.put("/api/clients/:id", clientController.updateClient);
+  router.put("/:id", clientController.updateClient);
 
-  // Get clients by userId
-  app.get("/api/clients/user/:userId", clientController.getClientsByUser);
+  // Get clients by userId (GET with param)
+  router.get("/user/:userId", clientController.getClientsByUser);
+
+  // Mount router on /client
+  app.use("/client", router);
 };

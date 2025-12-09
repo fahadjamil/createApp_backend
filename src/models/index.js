@@ -11,19 +11,24 @@ const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
   dialectModule: require("pg"),
   logging: false,
   dialectOptions: {
-    requestTimeout: 10000,
+    connectTimeout: 60000,
     useUTC: false,
     timezone: "+04:00",
     ssl: {
+      require: true,
       rejectUnauthorized: false,
     },
   },
   timezone: "+04:00",
   pool: {
-    max: dbConfig.pool.max,
-    min: dbConfig.pool.min,
-    acquire: dbConfig.pool.acquire,
-    idle: dbConfig.pool.idle,
+    max: 2, // Reduced for serverless
+    min: 0,
+    acquire: 30000,
+    idle: 10000,
+    evict: 1000,
+  },
+  retry: {
+    max: 3, // Retry connection up to 3 times
   },
 });
 

@@ -189,7 +189,7 @@ exports.updateClient = async (req, res) => {
 };
 
 /* ======================================================
-   ✅ GET ALL CLIENTS OF A SPECIFIC USER
+   ✅ GET ALL CLIENTS OF A SPECIFIC USER (GET - userId from params)
 ====================================================== */
 exports.getClientsByUser = async (req, res) => {
   try {
@@ -207,7 +207,46 @@ exports.getClientsByUser = async (req, res) => {
           model: Project,
           as: "project",
           required: false,
-          attributes: ["pid", "projectName", "projectType", "startDate", "endDate"],
+          attributes: ["pid", "projectName", "projectType", "startDate", "endDate", "projectAmount"],
+        },
+      ],
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: clients.length,
+      clients,
+    });
+  } catch (err) {
+    console.error("❌ Error fetching user clients:", err);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      error: err.message,
+    });
+  }
+};
+
+/* ======================================================
+   ✅ GET ALL CLIENTS OF A SPECIFIC USER (POST - userId from body)
+   Used by mobile app: POST /client/all_clients
+====================================================== */
+exports.getClientsByUserPost = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    const clients = await Client.findAll({
+      where: { userId },
+      order: [["createdAt", "DESC"]],
+      include: [
+        {
+          model: Project,
+          as: "project",
+          required: false,
+          attributes: ["pid", "projectName", "projectType", "startDate", "endDate", "projectAmount"],
         },
       ],
     });
