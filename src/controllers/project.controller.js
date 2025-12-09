@@ -99,21 +99,42 @@ exports.Newproject = async (req, res) => {
 // Accepts both contact* and point* field names from mobile app
 const syncClient = async (data) => {
   try {
+    console.log("🔷 ========== CLIENT SYNC START ==========");
+    console.log("📥 Incoming data payload:", JSON.stringify({
+      contactNumber: data.contactNumber,
+      pointMobile: data.pointMobile,
+      clientName: data.clientName,
+      client: data.client,
+      contactBrand: data.contactBrand,
+      pointBrand: data.pointBrand,
+      contactEmail: data.contactEmail,
+      pointEmail: data.pointEmail,
+      contactName: data.contactName,
+      pointName: data.pointName,
+      contactRole: data.contactRole,
+      pointRole: data.pointRole,
+      projectId: data.projectId,
+      userId: data.userId,
+    }, null, 2));
+
     // Support both naming conventions: contactNumber OR pointMobile
     const phone = data.contactNumber || data.pointMobile;
     
     if (!phone) {
       console.log("⚠️ No phone provided (contactNumber/pointMobile), skipping client sync");
+      console.log("🔷 ========== CLIENT SYNC END (SKIPPED) ==========");
       return null;
     }
 
     if (!data.projectId) {
       console.log("⚠️ No projectId provided, skipping client sync");
+      console.log("🔷 ========== CLIENT SYNC END (SKIPPED) ==========");
       return null;
     }
 
     if (!data.userId) {
       console.log("⚠️ No userId provided, skipping client sync");
+      console.log("🔷 ========== CLIENT SYNC END (SKIPPED) ==========");
       return null;
     }
 
@@ -130,7 +151,7 @@ const syncClient = async (data) => {
       userId: data.userId,
     };
 
-    console.log("📋 Client sync data:", JSON.stringify(clientData, null, 2));
+    console.log("📋 Prepared client data:", JSON.stringify(clientData, null, 2));
 
     // 🔍 Find client by phone
     let client = await Client.findOne({
@@ -140,17 +161,24 @@ const syncClient = async (data) => {
       },
     });
 
+    console.log("🔍 Existing client found:", client ? "YES" : "NO");
+
     if (client) {
       await client.update(clientData);
-      console.log(`🔄 Existing client updated: ${client.fullName}`);
+      console.log(`🔄 Existing client UPDATED`);
     } else {
       client = await Client.create(clientData);
-      console.log(`✅ New client created: ${client.fullName}`);
+      console.log(`✅ New client CREATED`);
     }
+
+    console.log("📤 Client response:", JSON.stringify(client.toJSON(), null, 2));
+    console.log("🔷 ========== CLIENT SYNC END (SUCCESS) ==========");
 
     return client;
   } catch (err) {
-    console.error("❌ Client sync failed:", err.message);
+    console.error("❌ Client sync FAILED:", err.message);
+    console.error("❌ Full error:", err);
+    console.log("🔷 ========== CLIENT SYNC END (ERROR) ==========");
     return null;
   }
 };
