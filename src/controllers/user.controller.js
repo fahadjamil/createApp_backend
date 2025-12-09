@@ -251,3 +251,101 @@ exports.checkPhoneAndSendOtp = async (req, res) => {
     });
   }
 };
+
+// ✅ Update user profile
+exports.updateProfile = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { firstName, lastName, phone, role, searchTerm } = req.body;
+
+    console.log("📝 ========== UPDATE PROFILE ==========");
+    console.log("👤 User ID:", userId);
+    console.log("📦 Update Data:", req.body);
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    // Find user
+    const user = await User.findOne({ where: { uid: userId } });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Update user fields
+    const updatedFields = {};
+    if (firstName !== undefined) updatedFields.firstName = firstName;
+    if (lastName !== undefined) updatedFields.lastName = lastName;
+    if (phone !== undefined) updatedFields.phone = phone;
+    if (role !== undefined) updatedFields.role = role;
+    if (searchTerm !== undefined) updatedFields.searchTerm = searchTerm;
+    
+    // Update full_name if firstName or lastName changed
+    if (firstName !== undefined || lastName !== undefined) {
+      updatedFields.full_name = `${firstName || user.firstName} ${lastName || user.lastName}`;
+    }
+
+    await user.update(updatedFields);
+
+    console.log("✅ Profile updated successfully");
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        uid: user.uid,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        fullName: user.full_name,
+        email: user.email,
+        role: user.role,
+        searchTerm: user.searchTerm,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Update profile error:", error);
+    res.status(500).json({ 
+      message: "Internal server error",
+      error: error.message 
+    });
+  }
+};
+
+// ✅ Get user by ID
+exports.getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    const user = await User.findOne({
+      where: { uid: userId },
+      attributes: { exclude: ["password"] },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      user: {
+        uid: user.uid,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        fullName: user.full_name,
+        email: user.email,
+        role: user.role,
+        searchTerm: user.searchTerm,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Get user error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};

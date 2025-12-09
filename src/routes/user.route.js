@@ -13,6 +13,12 @@ module.exports = (app) => {
 
   router.post("/check-phone", authController.checkPhoneAndSendOtp);
 
+  // ✅ Update user profile
+  router.put("/profile/:userId", authController.updateProfile);
+
+  // ✅ Get user by ID
+  router.get("/profile/:userId", authController.getUserById);
+
   // Mount the router on /user
   app.use("/user", router);
 };
