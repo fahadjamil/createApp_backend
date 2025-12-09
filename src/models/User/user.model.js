@@ -75,6 +75,7 @@ module.exports = (sequelize, Sequelize) => {
       },
     },
     {
+      tableName: "user", // Explicit table name to match foreign key references
       timestamps: true, // adds createdAt and updatedAt
       paranoid: true, // adds deletedAt for soft delete
     }
