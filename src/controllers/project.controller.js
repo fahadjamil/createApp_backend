@@ -508,6 +508,18 @@ exports.deleteProject = async (req, res) => {
       });
     }
 
+    // Prevent deletion of signed or completed projects
+    const projectStatus = (project.projectStatus || project.status || "").toLowerCase();
+    const protectedStatuses = ["contract signed & uploaded", "completed", "project completed"];
+    
+    if (protectedStatuses.some(status => projectStatus.includes(status.toLowerCase()))) {
+      console.log("⚠️ Cannot delete project with status:", projectStatus);
+      return res.status(403).json({
+        success: false,
+        message: "❌ Projects that are signed or completed cannot be deleted",
+      });
+    }
+
     // Delete the project
     await project.destroy();
 
