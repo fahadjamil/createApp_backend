@@ -19,7 +19,11 @@ module.exports = (app) => {
   // Get single Project
   router.get("/:id", projectController.getProjectById);
 
+  // Update project
   router.put("/update_project/:id", projectController.updateProject);
+
+  // Delete project
+  router.delete("/delete_project/:id", projectController.deleteProject);
 
   // Create draft project
   router.post("/draftProject", projectController.DraftProject);
@@ -29,6 +33,9 @@ module.exports = (app) => {
 
   // Get single draft by ID
   router.get("/draft/:id", projectController.getSingleDraftProject);
+
+  // Delete draft project
+  router.delete("/delete_draft/:id", projectController.deleteDraftProject);
 
   // Mount router on /project
   app.use("/project", router);

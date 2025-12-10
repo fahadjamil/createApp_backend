@@ -483,3 +483,89 @@ exports.getSingleDraftProject = async (req, res) => {
     });
   }
 };
+
+// 📌 Delete Project by ID
+exports.deleteProject = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Project ID is required",
+      });
+    }
+
+    console.log("🗑️ Attempting to delete project:", id);
+
+    // Find the project first
+    const project = await Project.findOne({ where: { pid: id } });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "❌ Project not found",
+      });
+    }
+
+    // Delete the project
+    await project.destroy();
+
+    console.log("✅ Project deleted successfully:", id);
+
+    return res.status(200).json({
+      success: true,
+      message: "✅ Project deleted successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error deleting project:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete project",
+      error: error.message,
+    });
+  }
+};
+
+// 📌 Delete Draft Project by ID
+exports.deleteDraftProject = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Draft project ID is required",
+      });
+    }
+
+    console.log("🗑️ Attempting to delete draft project:", id);
+
+    // Find the draft project first
+    const draftProject = await DraftProject.findOne({ where: { dpid: id } });
+
+    if (!draftProject) {
+      return res.status(404).json({
+        success: false,
+        message: "❌ Draft project not found",
+      });
+    }
+
+    // Delete the draft project
+    await draftProject.destroy();
+
+    console.log("✅ Draft project deleted successfully:", id);
+
+    return res.status(200).json({
+      success: true,
+      message: "✅ Draft project deleted successfully",
+    });
+  } catch (error) {
+    console.error("❌ Error deleting draft project:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete draft project",
+      error: error.message,
+    });
+  }
+};
