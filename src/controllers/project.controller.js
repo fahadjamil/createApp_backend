@@ -316,7 +316,7 @@ exports.updateProject = async (req, res) => {
 
     // Check current project status
     const currentStatus = (project.projectStatus || project.status || "").toLowerCase();
-    const isDelayed = currentStatus.includes("delayed") || currentStatus.includes("project delayed");
+    const isDelayed = currentStatus === "delayed";
 
     // ✅ whitelist fields you allow to update (to avoid overwriting system fields like userId, createdAt)
     let updatableFields = [
@@ -522,9 +522,9 @@ exports.deleteProject = async (req, res) => {
 
     // Prevent deletion of signed or completed projects
     const projectStatus = (project.projectStatus || project.status || "").toLowerCase();
-    const protectedStatuses = ["contract signed & uploaded", "completed", "project completed"];
+    const protectedStatuses = ["signed", "completed"];
     
-    if (protectedStatuses.some(status => projectStatus.includes(status.toLowerCase()))) {
+    if (protectedStatuses.includes(projectStatus)) {
       console.log("⚠️ Cannot delete project with status:", projectStatus);
       return res.status(403).json({
         success: false,
