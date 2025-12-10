@@ -317,6 +317,7 @@ exports.updateProject = async (req, res) => {
     // Check current project status
     const currentStatus = (project.projectStatus || project.status || "").toLowerCase();
     const isDelayed = currentStatus === "delayed";
+    const isInDispute = currentStatus === "in dispute";
 
     // ✅ whitelist fields you allow to update (to avoid overwriting system fields like userId, createdAt)
     let updatableFields = [
@@ -328,6 +329,7 @@ exports.updateProject = async (req, res) => {
       "endDate",
       "description",
       "tags",
+      "media",
       "projectStatus",
     ];
 
@@ -335,6 +337,12 @@ exports.updateProject = async (req, res) => {
     if (isDelayed) {
       console.log("⚠️ Project is delayed - only endDate update allowed");
       updatableFields = ["endDate", "projectStatus"];
+    }
+
+    // If project is in dispute, only allow updating tags, media, and projectStatus
+    if (isInDispute) {
+      console.log("⚠️ Project is in dispute - only tags and media update allowed");
+      updatableFields = ["tags", "media", "projectStatus"];
     }
 
     const updates = {};
