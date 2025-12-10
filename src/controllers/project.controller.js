@@ -314,8 +314,12 @@ exports.updateProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    // Check current project status
+    const currentStatus = (project.projectStatus || project.status || "").toLowerCase();
+    const isDelayed = currentStatus.includes("delayed") || currentStatus.includes("project delayed");
+
     // ✅ whitelist fields you allow to update (to avoid overwriting system fields like userId, createdAt)
-    const updatableFields = [
+    let updatableFields = [
       "projectName",
       "projectType",
       "clientName",
@@ -326,6 +330,12 @@ exports.updateProject = async (req, res) => {
       "tags",
       "projectStatus",
     ];
+
+    // If project is delayed, only allow updating endDate and projectStatus
+    if (isDelayed) {
+      console.log("⚠️ Project is delayed - only endDate update allowed");
+      updatableFields = ["endDate", "projectStatus"];
+    }
 
     const updates = {};
     updatableFields.forEach((field) => {
@@ -339,7 +349,9 @@ exports.updateProject = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Project updated successfully",
+      message: isDelayed 
+        ? "Project end date updated successfully (project is delayed)" 
+        : "Project updated successfully",
       project,
     });
   } catch (error) {
