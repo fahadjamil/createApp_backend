@@ -67,6 +67,23 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Database Sync Endpoint (one-time use to add missing columns)
+app.get("/sync-db", async (req, res) => {
+  try {
+    await db.sequelize.sync({ alter: true });
+    res.status(200).json({
+      success: true,
+      message: "Database schema synced successfully",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Database sync failed: " + error.message,
+    });
+  }
+});
+
 // Database Connection
 db.sequelize
   .authenticate()
