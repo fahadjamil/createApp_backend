@@ -14,7 +14,7 @@ const {
 } = require("../middlewares/errorHandler");
 const logger = require("../utils/logger");
 const { HTTP_STATUS, MESSAGES, TOKEN_EXPIRY } = require("../utils/constants");
-const { sendPasswordResetEmail, sendWelcomeEmail } = require("../utils/email");
+const { sendPasswordResetEmail, sendPasswordResetLinkEmail, sendWelcomeEmail } = require("../utils/email");
 
 // Initialize Firebase Admin if not already initialized
 const initFirebaseAdmin = () => {
@@ -167,12 +167,18 @@ exports.signin = asyncHandler(async (req, res) => {
   }
 
   // Compare password
+  logger.info("About to compare passwords", { 
+    email: user.email,
+    inputPassword: password,
+    inputPasswordLength: password?.length,
+    storedHash: user.password?.substring(0, 30) + "...",
+    storedHashLength: user.password?.length
+  });
+
   const isMatch = await bcrypt.compare(password, user.password);
   
-  logger.info("Password comparison", { 
+  logger.info("Password comparison result", { 
     email: user.email,
-    passwordLength: password?.length,
-    storedHashLength: user.password?.length,
     isMatch: isMatch
   });
 
@@ -407,7 +413,37 @@ exports.getUserById = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Request password reset - generates new password and sends via email
+ * @desc    Test password hashing (DEVELOPMENT ONLY - REMOVE IN PRODUCTION)
+ * @route   POST /user/test-password
+ * @access  Public
+ */
+exports.testPassword = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  
+  const user = await User.findOne({ 
+    where: db.Sequelize.where(
+      db.Sequelize.fn('LOWER', db.Sequelize.col('email')),
+      email.trim().toLowerCase()
+    ),
+    attributes: ['uid', 'email', 'password']
+  });
+  
+  if (!user) {
+    return res.json({ error: "User not found" });
+  }
+  
+  const isMatch = await bcrypt.compare(password, user.password);
+  
+  res.json({
+    email: user.email,
+    inputPassword: password,
+    storedHash: user.password,
+    isMatch: isMatch
+  });
+});
+
+/**
+ * @desc    Request password reset - sends reset link via email (secure token-based)
  * @route   POST /user/forgot-password
  * @access  Public
  */
@@ -435,81 +471,71 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
   });
 
   // For security, always return success even if user not found
+  // This prevents email enumeration attacks
   if (!user) {
     logger.debug("Password reset requested for non-existent email", { email });
     return res.status(HTTP_STATUS.OK).json({
       success: true,
-      message: "If an account exists with this email, a new password has been sent.",
+      message: "If an account exists with this email, a reset link has been sent.",
     });
   }
 
-  // Generate a new random password (8 characters: letters + numbers)
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let password = '';
-    for (let i = 0; i < 8; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
-  };
+  // Generate a secure random token (32 bytes = 64 hex chars)
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  
+  // Hash the token before storing (never store plain tokens in database)
+  const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+  
+  // Set token expiry (1 hour from now)
+  const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
 
-  const newPassword = generatePassword();
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-  logger.info("Generated new password for user", { 
-    userId: user.uid, 
-    email: user.email,
-    newPassword: newPassword, // Remove this log in production!
-    hashedLength: hashedPassword.length 
+  // Save hashed token and expiry to user
+  await user.update({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpires: tokenExpiry,
   });
 
-  // Update user's password in database
-  try {
-    await user.update({
-      password: hashedPassword,
-    });
-    
-    // Verify the update was successful
-    const updatedUser = await User.findOne({ where: { email: user.email } });
-    const verifyMatch = await bcrypt.compare(newPassword, updatedUser.password);
-    logger.info("Password update verification", { 
-      userId: user.uid, 
-      passwordUpdated: verifyMatch 
-    });
-  } catch (updateError) {
-    logger.error("Failed to update password in database", { error: updateError.message });
-    throw new BadRequestError("Failed to update password. Please try again.");
-  }
+  logger.info("Reset token generated for user", { 
+    userId: user.uid, 
+    email: user.email,
+    expiresAt: tokenExpiry.toISOString()
+  });
 
-  // Send new password via email
+  // Build reset URL - the plain token goes in the URL (user receives this)
+  const frontendUrl = process.env.FRONTEND_URL || "https://createit.pk";
+  const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+  // Send email with reset link
   try {
-    const emailSent = await sendPasswordResetEmail(
+    const emailSent = await sendPasswordResetLinkEmail(
       user.email,
-      newPassword,
-      user.firstName || "User"
+      resetUrl,
+      user.firstName || user.full_name || "User"
     );
 
     if (!emailSent) {
-      throw new Error("Failed to send email");
+      logger.error("Failed to send password reset email", { userId: user.uid });
+      // Don't throw - still return success for security (don't reveal if email sending failed)
+    } else {
+      logger.info("Password reset email sent successfully", { userId: user.uid, email: user.email });
     }
-
-    logger.info("New password sent via email", { userId: user.uid, email: user.email });
-    
-    const response = {
-      success: true,
-      message: "A new password has been sent to your email!",
-    };
-    
-    // Include password in development for testing (REMOVE IN PRODUCTION!)
-    if (process.env.ENV !== "production") {
-      response.newPassword = newPassword;
-    }
-    
-    res.status(HTTP_STATUS.OK).json(response);
   } catch (error) {
-    logger.error("Failed to send password reset email", { error: error.message });
-    throw new BadRequestError("Failed to send password reset email. Please try again.");
+    logger.error("Error sending password reset email", { error: error.message, userId: user.uid });
+    // Don't throw - still return success for security
   }
+
+  const response = {
+    success: true,
+    message: "If an account exists with this email, a reset link has been sent.",
+  };
+  
+  // Include reset URL in development for testing (REMOVE IN PRODUCTION!)
+  if (process.env.ENV !== "production") {
+    response.resetUrl = resetUrl;
+    response.token = resetToken;
+  }
+  
+  res.status(HTTP_STATUS.OK).json(response);
 });
 
 /**
