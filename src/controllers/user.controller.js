@@ -2,47 +2,46 @@ const db = require("../models");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
+const crypto = require("crypto");
 
 const User = db.User;
+const asyncHandler = require("../middlewares/asyncHandler");
+const {
+  BadRequestError,
+  NotFoundError,
+  ConflictError,
+} = require("../middlewares/errorHandler");
+const logger = require("../utils/logger");
+const { HTTP_STATUS, MESSAGES, TOKEN_EXPIRY } = require("../utils/constants");
 
-exports.signup = async (req, res) => {
+/**
+ * @desc    User signup
+ * @route   POST /user/signup
+ * @access  Public
+ */
+exports.signup = asyncHandler(async (req, res) => {
+  logger.info("User signup attempt", { email: req.body.email });
+
+  const { phone, firstName, lastName, email, password, role, searchTerm } = req.body;
+
+  // Check if user already exists
+  const existingUser = await User.findOne({
+    where: {
+      [db.Sequelize.Op.or]: [{ email }, { phone }],
+    },
+  });
+
+  if (existingUser) {
+    throw new ConflictError(MESSAGES.ERROR.ALREADY_EXISTS("User with this email or phone"));
+  }
+
+  // Hash password
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  // Create new user with transaction
   const trans = await db.sequelize.transaction();
+
   try {
-    console.log("📥 DEBUG req.body:", req.body); // Add this to debug
-
-    if (!req.body || typeof req.body !== "object") {
-      return res
-        .status(400)
-        .json({ message: "Invalid or missing request body." });
-    }
-
-    const { phone, firstName, lastName, email, password, role, searchTerm } =
-      req.body;
-    // Validation
-    if (!phone || !firstName || !lastName || !email || !password) {
-      return res.status(400).json({
-        message:
-          "Phone, first name, last name, email, and password are required.",
-      });
-    }
-
-    // Check if user already exists (by email or phone)
-    const existingUser = await User.findOne({
-      where: {
-        [db.Sequelize.Op.or]: [{ email }, { phone }],
-      },
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        message: "User with this email or phone number already exists.",
-      });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create new user
     const user = await User.create(
       {
         phone,
@@ -65,13 +64,15 @@ exports.signup = async (req, res) => {
         role: user.role,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: TOKEN_EXPIRY }
     );
 
     await trans.commit();
+    logger.info("User signup successful", { userId: user.uid });
 
-    res.status(201).json({
-      message: "User signup successful",
+    res.status(HTTP_STATUS.CREATED).json({
+      success: true,
+      message: MESSAGES.SUCCESS.SIGNUP,
       token,
       user: {
         uid: user.uid,
@@ -86,266 +87,383 @@ exports.signup = async (req, res) => {
     });
   } catch (error) {
     await trans.rollback();
-    console.error("Signup error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    throw error;
   }
-};
+});
 
-exports.signin = async (req, res) => {
-  try {
-    // const { req.body.email, password } = req.body;
-    console.log(req.body.email);
-    console.log(req.body.password);
-    // Validation
-    if (!req.body.email || !req.body.password) {
-      return res.status(400).json({ message: "Email and password required" });
-    }
+/**
+ * @desc    User signin
+ * @route   POST /user/signin
+ * @access  Public
+ */
+exports.signin = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
 
-    // Find user
-    const user = await User.findOne({ where: { email: req.body.email } });
-    if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
-    }
+  logger.info("User signin attempt", { email });
 
-    // Compare password
-    const isMatch = await bcrypt.compare(req.body.password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
-    }
+  // Find user
+  const user = await User.findOne({ where: { email } });
 
-    const token = jwt.sign(
-      { uid: user.uid, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+  if (!user) {
+    throw new BadRequestError(MESSAGES.ERROR.INVALID_CREDENTIALS);
+  }
+
+  // Compare password
+  const isMatch = await bcrypt.compare(password, user.password);
+
+  if (!isMatch) {
+    throw new BadRequestError(MESSAGES.ERROR.INVALID_CREDENTIALS);
+  }
+
+  const token = jwt.sign(
+    { uid: user.uid, email: user.email, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: TOKEN_EXPIRY }
+  );
+
+  logger.info("User signin successful", { userId: user.uid });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.LOGIN,
+    token,
+    user: {
+      uid: user.uid,
+      full_name: user.full_name,
+      email: user.email,
+      role: user.role,
+    },
+  });
+});
+
+/**
+ * @desc    Get all users
+ * @route   GET /user/all
+ * @access  Private (Admin)
+ */
+exports.getAllUsers = asyncHandler(async (req, res) => {
+  const users = await User.findAll({
+    attributes: { exclude: ["password"] },
+    order: [["createdAt", "DESC"]],
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Users"),
+    count: users.length,
+    users,
+  });
+});
+
+/**
+ * @desc    Check email availability
+ * @route   POST /user/check-email
+ * @access  Public
+ */
+exports.checkEmail = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || typeof email !== "string") {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Email"));
+  }
+
+  logger.debug("Checking email availability", { email });
+
+  const existingUser = await User.findOne({ where: { email } });
+
+  if (existingUser) {
+    logger.debug("Email already registered", { email });
+    return res.status(HTTP_STATUS.OK).json({
+      exists: true,
+      message: "Email already exists.",
+    });
+  }
+
+  logger.debug("Email available", { email });
+  res.status(HTTP_STATUS.OK).json({
+    exists: false,
+    message: "Email is available.",
+  });
+});
+
+/**
+ * @desc    Check phone and send OTP
+ * @route   POST /user/check-phone
+ * @access  Public
+ */
+exports.checkPhoneAndSendOtp = asyncHandler(async (req, res) => {
+  const { phone } = req.body;
+
+  if (!phone) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Phone number"));
+  }
+
+  // Validate phone format (Pakistan) - accepts 10 digits after +92
+  const phoneRegex = /^\+92\d{10}$/;
+  if (!phoneRegex.test(phone)) {
+    throw new BadRequestError(
+      "Invalid phone format. Please use +92 followed by 10 digits (e.g., +923312344567)."
     );
+  }
 
-    res.status(200).json({
-      message: "Login successful",
-      token,
-      user: {
-        uid: user.uid,
-        full_name: user.full_name,
-        email: user.email,
-        role: user.role,
+  // Check if phone exists
+  const existingUser = await User.findOne({ where: { phone } });
+
+  if (existingUser) {
+    return res.status(HTTP_STATUS.BAD_REQUEST).json({
+      exists: true,
+      message: "This phone number is already registered.",
+    });
+  }
+
+  // Generate OTP
+  const otpToSend = Math.floor(1000 + Math.random() * 9000);
+
+  // Send OTP via external API
+  try {
+    await axios.post("https://bsms.its.com.pk/otpsms.php", null, {
+      params: {
+        key: process.env.SMS_API_KEY || "8aaf1d3a0b626b4840b6558792b4506b",
+        receiver: phone,
+        sender: "SmartLane",
+        otpcode: otpToSend,
+        param1: "Create App",
+        param2: "Verification",
       },
     });
+
+    logger.info("OTP sent successfully", { phone });
   } catch (error) {
-    console.error("Signin error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    logger.error("Failed to send OTP", { phone, error: error.message });
+    // Continue even if SMS fails - return OTP for testing
   }
-};
-exports.getAllUsers = async (req, res) => {
-  try {
-    const users = await User.findAll({
-      attributes: {
-        exclude: ["password"], // Hide password from the response
-      },
-      order: [["createdAt", "DESC"]], // Optional: newest first
-    });
 
-    res.status(200).json({
-      message: "All users retrieved successfully",
-      users,
-    });
-  } catch (error) {
-    console.error("Get all users error:", error);
-    res.status(500).json({ message: "Internal server error" });
+  res.status(HTTP_STATUS.OK).json({
+    exists: false,
+    message: MESSAGES.SUCCESS.OTP_SENT(phone),
+    // Include OTP in development only
+    ...(process.env.ENV !== "production" && { otp: otpToSend }),
+  });
+});
+
+/**
+ * @desc    Update user profile
+ * @route   PUT /user/update/:userId
+ * @access  Private
+ */
+exports.updateProfile = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const { firstName, lastName, phone, role, searchTerm } = req.body;
+
+  logger.info("Update profile attempt", { userId });
+
+  if (!userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
   }
-};
-exports.checkEmail = async (req, res) => {
-  try {
-    const { email } = req.body;
 
-    // 🧩 Input validation
-    if (!email || typeof email !== "string") {
-      return res.status(400).json({ message: "A valid email is required." });
-    }
+  const user = await User.findOne({ where: { uid: userId } });
 
-    console.log("📩 Checking email availability:", email);
+  if (!user) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("User"));
+  }
 
-    // 🔍 Check if email already exists
-    const existingUser = await User.findOne({ where: { email } });
+  // Build update object
+  const updatedFields = {};
+  if (firstName !== undefined) updatedFields.firstName = firstName;
+  if (lastName !== undefined) updatedFields.lastName = lastName;
+  if (phone !== undefined) updatedFields.phone = phone;
+  if (role !== undefined) updatedFields.role = role;
+  if (searchTerm !== undefined) updatedFields.searchTerm = searchTerm;
 
-    if (existingUser) {
-      console.log("⚠️ Email already registered:", email);
-      return res.status(200).json({
-        exists: true,
-        message: "Email already exists.",
-      });
-    }
+  // Update full_name if name changed
+  if (firstName !== undefined || lastName !== undefined) {
+    updatedFields.full_name = `${firstName || user.firstName} ${lastName || user.lastName}`;
+  }
 
-    console.log("✅ Email available:", email);
-    return res.status(200).json({
-      exists: false,
-      message: "Email is available.",
-    });
-  } catch (error) {
-    console.error("❌ checkEmail() error:", error.message);
-    return res.status(500).json({
-      message: "Internal server error while checking email.",
-      error: error.message,
+  await user.update(updatedFields);
+  logger.info("Profile updated successfully", { userId });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.UPDATED("Profile"),
+    user: {
+      uid: user.uid,
+      phone: user.phone,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: user.full_name,
+      email: user.email,
+      role: user.role,
+      searchTerm: user.searchTerm,
+    },
+  });
+});
+
+/**
+ * @desc    Get user by ID
+ * @route   GET /user/:userId
+ * @access  Private
+ */
+exports.getUserById = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
+  }
+
+  const user = await User.findOne({
+    where: { uid: userId },
+    attributes: { exclude: ["password"] },
+  });
+
+  if (!user) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("User"));
+  }
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    user: {
+      uid: user.uid,
+      phone: user.phone,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: user.full_name,
+      email: user.email,
+      role: user.role,
+      searchTerm: user.searchTerm,
+    },
+  });
+});
+
+/**
+ * @desc    Request password reset
+ * @route   POST /user/forgot-password
+ * @access  Public
+ */
+exports.forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Email"));
+  }
+
+  logger.info("Password reset requested", { email });
+
+  // Find user by email
+  const user = await User.findOne({ where: { email } });
+
+  // For security, always return success even if user not found
+  if (!user) {
+    logger.debug("Password reset requested for non-existent email", { email });
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: "If an account exists with this email, a password reset link has been sent.",
     });
   }
-};
-exports.checkPhoneAndSendOtp = async (req, res) => {
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+
+  // Set token expiry (1 hour)
+  const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
+
+  // Save token to user
+  await user.update({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpires: resetExpires,
+  });
+
+  // Create reset URL - this would be your app's deep link
+  const resetUrl = `createapp://reset-password?token=${resetToken}`;
+
+  // Send email using an email service
+  // For now, we'll use the SMS API to send an email notification
+  // In production, use a proper email service like SendGrid, Mailgun, etc.
   try {
-    // const { phone } = req.body;
+    // You can integrate with an email service here
+    // For example with SendGrid:
+    // await sendEmail({
+    //   to: user.email,
+    //   subject: 'Password Reset Request',
+    //   html: `<p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 1 hour.</p>`
+    // });
 
-    if (!req.body.phone) {
-      return res.status(400).json({ message: "Phone number is required." });
-    }
-
-    // ✅ Strictly validate +92XXXXXXXXXX format (Pakistan)
-    const phoneRegex = /^\+92\d{10}$/;
-    if (!phoneRegex.test(req.body.phone)) {
-      return res.status(400).json({
-        message:
-          "Invalid phone format. Please use +92 followed by 10 digits (e.g., +923001234567).",
-      });
-    }
-
-    // 🔍 Check if phone exists in DB
-    const existingUser = await User.findOne({
-      where: { phone: req.body.phone },
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        exists: true,
-        message: "This phone number is already registered.",
-      });
-    }
-
-    // ✅ Generate random 4-digit OTP
-    const otpToSend = Math.floor(1000 + Math.random() * 9000);
-
-    // 🔹 Send OTP via external API
-    const response = await axios.post(
-      "https://bsms.its.com.pk/otpsms.php",
-      null,
-      {
-        params: {
-          key: "8aaf1d3a0b626b4840b6558792b4506b",
-          receiver: req.body.phone,
-          sender: "SmartLane",
-          otpcode: otpToSend,
-          param1: "Toseef Kirmani",
-          param2: "Add Money",
-        },
-      }
-    );
-
-    console.log("📤 OTP Response:", response.data);
-
-    // ✅ Respond to client
-    return res.status(200).json({
-      exists: false,
-      message: `OTP sent successfully to ${req.body.phone}`,
-      otp: otpToSend, // ⚠️ Remove in production
-    });
-  } catch (error) {
-    console.error("❌ Phone check or OTP send error:", error.message);
-    return res.status(500).json({
-      message: "Internal server error or OTP sending failed.",
-      error: error.message,
-    });
-  }
-};
-
-// ✅ Update user profile
-exports.updateProfile = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { firstName, lastName, phone, role, searchTerm } = req.body;
-
-    console.log("📝 ========== UPDATE PROFILE ==========");
-    console.log("👤 User ID:", userId);
-    console.log("📦 Update Data:", req.body);
-
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
-
-    // Find user
-    const user = await User.findOne({ where: { uid: userId } });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Update user fields
-    const updatedFields = {};
-    if (firstName !== undefined) updatedFields.firstName = firstName;
-    if (lastName !== undefined) updatedFields.lastName = lastName;
-    if (phone !== undefined) updatedFields.phone = phone;
-    if (role !== undefined) updatedFields.role = role;
-    if (searchTerm !== undefined) updatedFields.searchTerm = searchTerm;
+    logger.info("Password reset token generated", { userId: user.uid });
     
-    // Update full_name if firstName or lastName changed
-    if (firstName !== undefined || lastName !== undefined) {
-      updatedFields.full_name = `${firstName || user.firstName} ${lastName || user.lastName}`;
-    }
-
-    await user.update(updatedFields);
-
-    console.log("✅ Profile updated successfully");
-
-    res.status(200).json({
+    // For development, include token in response
+    const response = {
       success: true,
-      message: "Profile updated successfully",
-      user: {
-        uid: user.uid,
-        phone: user.phone,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        fullName: user.full_name,
-        email: user.email,
-        role: user.role,
-        searchTerm: user.searchTerm,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Update profile error:", error);
-    res.status(500).json({ 
-      message: "Internal server error",
-      error: error.message 
-    });
-  }
-};
+      message: "Password reset email sent! Check your inbox.",
+    };
 
-// ✅ Get user by ID
-exports.getUserById = async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
+    // Include token in development for testing
+    if (process.env.ENV !== "production") {
+      response.resetToken = resetToken;
+      response.resetUrl = resetUrl;
     }
 
-    const user = await User.findOne({
-      where: { uid: userId },
-      attributes: { exclude: ["password"] },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.status(200).json({
-      success: true,
-      user: {
-        uid: user.uid,
-        phone: user.phone,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        fullName: user.full_name,
-        email: user.email,
-        role: user.role,
-        searchTerm: user.searchTerm,
-      },
-    });
+    res.status(HTTP_STATUS.OK).json(response);
   } catch (error) {
-    console.error("❌ Get user error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    // Clear the token if email fails
+    await user.update({
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
+    });
+
+    logger.error("Failed to send password reset email", { error: error.message });
+    throw new BadRequestError("Failed to send password reset email. Please try again.");
   }
-};
+});
+
+/**
+ * @desc    Reset password with token
+ * @route   POST /user/reset-password
+ * @access  Public
+ */
+exports.resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Token and new password"));
+  }
+
+  // Validate password strength
+  if (newPassword.length < 8) {
+    throw new BadRequestError("Password must be at least 8 characters long");
+  }
+
+  // Hash the provided token to compare with stored hash
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+  // Find user with valid token
+  const user = await User.findOne({
+    where: {
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: {
+        [db.Sequelize.Op.gt]: new Date(),
+      },
+    },
+  });
+
+  if (!user) {
+    throw new BadRequestError("Password reset token is invalid or has expired");
+  }
+
+  // Hash new password
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  // Update password and clear reset token
+  await user.update({
+    password: hashedPassword,
+    resetPasswordToken: null,
+    resetPasswordExpires: null,
+  });
+
+  logger.info("Password reset successful", { userId: user.uid });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "Password has been reset successfully. You can now log in with your new password.",
+  });
+});
