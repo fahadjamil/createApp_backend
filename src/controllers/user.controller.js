@@ -501,9 +501,9 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
     expiresAt: tokenExpiry.toISOString()
   });
 
-  // Build reset URL - the plain token goes in the URL (user receives this)
-  const frontendUrl = process.env.FRONTEND_URL || "https://create-app-eight.vercel.app";
-  const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+  // Build reset URL - points to backend's reset page
+  const backendUrl = process.env.BACKEND_URL || "https://create-backend-two.vercel.app";
+  const resetUrl = `${backendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
   // Send email with reset link
   try {

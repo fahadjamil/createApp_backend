@@ -104,6 +104,11 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Password Reset Page (served from backend)
+app.get("/reset-password", (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "reset-password.html"));
+});
+
 // Database Sync Endpoint (one-time use to add missing columns)
 app.get("/sync-db", async (req, res) => {
   try {
