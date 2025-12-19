@@ -35,7 +35,7 @@ module.exports = (app) => {
     userController.checkEmail
   );
 
-  // Forgot password - request reset
+  // Forgot password - request reset (sends email with reset token)
   router.post(
     "/forgot-password",
     userController.forgotPassword
