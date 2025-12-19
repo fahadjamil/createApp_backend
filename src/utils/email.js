@@ -13,26 +13,20 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const DEFAULT_FROM = process.env.RESEND_FROM_EMAIL || "Create App <noreply@createit.pk>";
 
 /**
- * Send password reset email
+ * Send password reset email with new temporary password
  * @param {string} to - Recipient email address
- * @param {string} resetToken - Password reset token
+ * @param {string} newPassword - The new temporary password
  * @param {string} firstName - User's first name
  * @returns {Promise<boolean>} - True if email sent successfully
  */
-const sendPasswordResetEmail = async (to, resetToken, firstName = "User") => {
-  // Create reset URL - adjust this to your web app URL
-  const resetUrl = `${process.env.APP_URL || "https://create-1cd84.firebaseapp.com"}/__/auth/action?mode=resetPassword&oobCode=${resetToken}`;
-  
-  // For mobile app deep link
-  const mobileResetUrl = `createapp://reset-password?token=${resetToken}`;
-
+const sendPasswordResetEmail = async (to, newPassword, firstName = "User") => {
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Reset Your Password</title>
+      <title>Your New Password</title>
     </head>
     <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
       <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
@@ -49,48 +43,41 @@ const sendPasswordResetEmail = async (to, resetToken, firstName = "User") => {
               <!-- Content -->
               <tr>
                 <td style="padding: 40px 30px;">
-                  <h2 style="margin: 0 0 20px; color: #0a1a33; font-size: 24px; font-weight: 600;">Reset Your Password</h2>
+                  <h2 style="margin: 0 0 20px; color: #0a1a33; font-size: 24px; font-weight: 600;">Your New Password</h2>
                   
                   <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
                     Hello ${firstName},
                   </p>
                   
                   <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
-                    We received a request to reset your password for your Create account. Click the button below to set a new password:
+                    We received a request to reset your password for your Create account. Your new temporary password is:
                   </p>
                   
-                  <!-- CTA Button -->
+                  <!-- Password Box -->
                   <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
                     <tr>
                       <td align="center">
-                        <a href="${resetUrl}" style="display: inline-block; padding: 16px 40px; background-color: #0a1a33; color: #ffffff; text-decoration: none; border-radius: 25px; font-size: 16px; font-weight: 600;">
-                          Reset Password
-                        </a>
+                        <div style="display: inline-block; padding: 20px 40px; background-color: #f0f4f8; border: 2px dashed #0a1a33; border-radius: 12px;">
+                          <span style="font-size: 24px; font-weight: 700; color: #0a1a33; letter-spacing: 2px; font-family: 'Courier New', monospace;">
+                            ${newPassword}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   </table>
                   
-                  <p style="margin: 0 0 10px; color: #666666; font-size: 14px; line-height: 1.6;">
-                    Or copy and paste this link into your browser:
-                  </p>
-                  <p style="margin: 0 0 20px; color: #0a1a33; font-size: 14px; word-break: break-all;">
-                    ${resetUrl}
-                  </p>
-                  
-                  <p style="margin: 0 0 20px; color: #666666; font-size: 14px; line-height: 1.6;">
-                    <strong>On mobile?</strong> Open the Create app and use this link:
-                    <br>
-                    <a href="${mobileResetUrl}" style="color: #0a1a33;">${mobileResetUrl}</a>
+                  <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
+                    Please use this password to log in to your account. We strongly recommend changing your password after logging in for security purposes.
                   </p>
                   
                   <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
                   
-                  <p style="margin: 0 0 10px; color: #999999; font-size: 13px; line-height: 1.5;">
-                    This link will expire in <strong>1 hour</strong> for security reasons.
+                  <p style="margin: 0 0 10px; color: #ff6b6b; font-size: 14px; line-height: 1.5; font-weight: 600;">
+                    ⚠️ Security Notice
                   </p>
                   
                   <p style="margin: 0; color: #999999; font-size: 13px; line-height: 1.5;">
-                    If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+                    If you didn't request a password reset, please contact us immediately at <a href="mailto:dev@createit.pk" style="color: #0a1a33;">dev@createit.pk</a> as someone may be trying to access your account.
                   </p>
                 </td>
               </tr>
@@ -119,15 +106,11 @@ Hello ${firstName},
 
 We received a request to reset your password for your Create account.
 
-Click this link to reset your password: ${resetUrl}
+Your new temporary password is: ${newPassword}
 
-On mobile? Use this link in the Create app: ${mobileResetUrl}
+Please use this password to log in to your account. We strongly recommend changing your password after logging in for security purposes.
 
-This link will expire in 1 hour for security reasons.
-
-If you didn't request a password reset, you can safely ignore this email.
-
-Need help? Contact us at dev@createit.pk
+If you didn't request a password reset, please contact us immediately at dev@createit.pk
 
 - The Create App Team
   `;

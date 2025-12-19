@@ -392,7 +392,7 @@ exports.getUserById = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Request password reset
+ * @desc    Request password reset - generates new password and sends via email
  * @route   POST /user/forgot-password
  * @access  Public
  */
@@ -413,61 +413,49 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
     logger.debug("Password reset requested for non-existent email", { email });
     return res.status(HTTP_STATUS.OK).json({
       success: true,
-      message: "If an account exists with this email, a password reset link has been sent.",
+      message: "If an account exists with this email, a new password has been sent.",
     });
   }
 
-  // Generate reset token
-  const resetToken = crypto.randomBytes(32).toString("hex");
-  const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+  // Generate a new random password (8 characters: letters + numbers)
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let password = '';
+    for (let i = 0; i < 8; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  };
 
-  // Set token expiry (1 hour)
-  const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
+  const newPassword = generatePassword();
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-  // Save token to user
+  // Update user's password in database
   await user.update({
-    resetPasswordToken: hashedToken,
-    resetPasswordExpires: resetExpires,
+    password: hashedPassword,
+    resetPasswordToken: null,
+    resetPasswordExpires: null,
   });
 
-  // Send password reset email via Resend
+  // Send new password via email
   try {
     const emailSent = await sendPasswordResetEmail(
       user.email,
-      resetToken,
+      newPassword,
       user.firstName || "User"
     );
 
     if (!emailSent) {
-      // Clear the token if email fails
-      await user.update({
-        resetPasswordToken: null,
-        resetPasswordExpires: null,
-      });
       throw new Error("Failed to send email");
     }
 
-    logger.info("Password reset email sent", { userId: user.uid, email: user.email });
+    logger.info("New password sent via email", { userId: user.uid, email: user.email });
     
-    // Response
-    const response = {
+    res.status(HTTP_STATUS.OK).json({
       success: true,
-      message: "Password reset email sent! Check your inbox.",
-    };
-
-    // Include token in development for testing
-    if (process.env.ENV !== "production") {
-      response.resetToken = resetToken;
-    }
-
-    res.status(HTTP_STATUS.OK).json(response);
-  } catch (error) {
-    // Clear the token if email fails
-    await user.update({
-      resetPasswordToken: null,
-      resetPasswordExpires: null,
+      message: "A new password has been sent to your email!",
     });
-
+  } catch (error) {
     logger.error("Failed to send password reset email", { error: error.message });
     throw new BadRequestError("Failed to send password reset email. Please try again.");
   }
