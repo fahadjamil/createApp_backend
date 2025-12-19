@@ -443,7 +443,7 @@ exports.testPassword = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Request password reset - sends reset link via email (secure token-based)
+ * @desc    Request password reset - sends secure reset link via email
  * @route   POST /user/forgot-password
  * @access  Public
  */
