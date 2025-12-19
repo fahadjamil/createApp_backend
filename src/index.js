@@ -36,33 +36,8 @@ const limiter = rateLimit({
 });
 app.use("/api/", limiter);
 
-// CORS Configuration
-const allowedOrigins = [
-  "https://create-app-eight.vercel.app",
-  "https://createit.pk",
-  "http://localhost:3000",
-  "http://localhost:3001",
-];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin) || process.env.CORS_ORIGIN === "*") {
-      callback(null, true);
-    } else {
-      callback(null, true); // Allow all origins for now, can be restricted later
-    }
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  credentials: true,
-};
-
-// Handle preflight requests
-app.options("*", cors(corsOptions));
-app.use(cors(corsOptions));
+// CORS - Allow all origins
+app.use(cors());
 
 // Request Logging
 if (process.env.ENV !== "production") {
