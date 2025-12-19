@@ -6,7 +6,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
-// Force database schema sync on startup to add any missing columns
+// Force database schema sync on startup to add any missing columns (v2)
 
 const db = require("../src/models");
 const logger = require("./utils/logger");
