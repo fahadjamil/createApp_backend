@@ -32,6 +32,7 @@
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "pg": "^8.16.3",
+    "resend": "^6.6.0",
     "sequelize": "^6.37.7"
   },
   "devDependencies": {

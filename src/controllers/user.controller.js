@@ -14,6 +14,7 @@ const {
 } = require("../middlewares/errorHandler");
 const logger = require("../utils/logger");
 const { HTTP_STATUS, MESSAGES, TOKEN_EXPIRY } = require("../utils/constants");
+const { sendPasswordResetEmail, sendWelcomeEmail } = require("../utils/email");
 
 // Initialize Firebase Admin if not already initialized
 const initFirebaseAdmin = () => {
@@ -56,6 +57,23 @@ exports.signup = asyncHandler(async (req, res) => {
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  // Create user in Firebase Auth for password reset functionality
+  let firebaseUid = null;
+  try {
+    const firebaseAdmin = initFirebaseAdmin();
+    const firebaseUser = await firebaseAdmin.auth().createUser({
+      email: email,
+      password: password,
+      displayName: `${firstName} ${lastName}`,
+      phoneNumber: phone,
+    });
+    firebaseUid = firebaseUser.uid;
+    logger.info("Firebase user created", { firebaseUid });
+  } catch (firebaseError) {
+    // Log but don't fail signup if Firebase fails
+    logger.warn("Firebase user creation failed (continuing with local signup):", firebaseError.message);
+  }
+
   // Create new user with transaction
   const trans = await db.sequelize.transaction();
 
@@ -70,6 +88,7 @@ exports.signup = asyncHandler(async (req, res) => {
         password: hashedPassword,
         role,
         searchTerm,
+        firebaseUid, // Store Firebase UID for reference
       },
       { transaction: trans }
     );
@@ -86,7 +105,7 @@ exports.signup = asyncHandler(async (req, res) => {
     );
 
     await trans.commit();
-    logger.info("User signup successful", { userId: user.uid });
+    logger.info("User signup successful", { userId: user.uid, firebaseUid });
 
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
@@ -105,6 +124,16 @@ exports.signup = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     await trans.rollback();
+    // If local DB fails but Firebase succeeded, try to clean up Firebase user
+    if (firebaseUid) {
+      try {
+        const firebaseAdmin = initFirebaseAdmin();
+        await firebaseAdmin.auth().deleteUser(firebaseUid);
+        logger.info("Cleaned up Firebase user after local DB failure", { firebaseUid });
+      } catch (cleanupError) {
+        logger.warn("Failed to cleanup Firebase user:", cleanupError.message);
+      }
+    }
     throw error;
   }
 });
@@ -401,24 +430,26 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
     resetPasswordExpires: resetExpires,
   });
 
-  // Create reset URL - this would be your app's deep link
-  const resetUrl = `createapp://reset-password?token=${resetToken}`;
-
-  // Send email using an email service
-  // For now, we'll use the SMS API to send an email notification
-  // In production, use a proper email service like SendGrid, Mailgun, etc.
+  // Send password reset email via Resend
   try {
-    // You can integrate with an email service here
-    // For example with SendGrid:
-    // await sendEmail({
-    //   to: user.email,
-    //   subject: 'Password Reset Request',
-    //   html: `<p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 1 hour.</p>`
-    // });
+    const emailSent = await sendPasswordResetEmail(
+      user.email,
+      resetToken,
+      user.firstName || "User"
+    );
 
-    logger.info("Password reset token generated", { userId: user.uid });
+    if (!emailSent) {
+      // Clear the token if email fails
+      await user.update({
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+      });
+      throw new Error("Failed to send email");
+    }
+
+    logger.info("Password reset email sent", { userId: user.uid, email: user.email });
     
-    // For development, include token in response
+    // Response
     const response = {
       success: true,
       message: "Password reset email sent! Check your inbox.",
@@ -427,7 +458,6 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
     // Include token in development for testing
     if (process.env.ENV !== "production") {
       response.resetToken = resetToken;
-      response.resetUrl = resetUrl;
     }
 
     res.status(HTTP_STATUS.OK).json(response);
