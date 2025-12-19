@@ -24,11 +24,12 @@ exports.signup = asyncHandler(async (req, res) => {
 
   const { phone, firstName, lastName, email, password, role, searchTerm } = req.body;
 
-  // Check if user already exists
+  // Check if user already exists (only select necessary columns)
   const existingUser = await User.findOne({
     where: {
       [db.Sequelize.Op.or]: [{ email }, { phone }],
     },
+    attributes: ['uid', 'email', 'phone']
   });
 
   if (existingUser) {
@@ -101,8 +102,11 @@ exports.signin = asyncHandler(async (req, res) => {
 
   logger.info("User signin attempt", { email });
 
-  // Find user
-  const user = await User.findOne({ where: { email } });
+  // Find user (only select necessary columns to avoid missing column errors)
+  const user = await User.findOne({ 
+    where: { email },
+    attributes: ['uid', 'email', 'password', 'role', 'full_name', 'firstName', 'lastName', 'phone']
+  });
 
   if (!user) {
     throw new BadRequestError(MESSAGES.ERROR.INVALID_CREDENTIALS);
@@ -169,7 +173,10 @@ exports.checkEmail = asyncHandler(async (req, res) => {
 
   logger.debug("Checking email availability", { email });
 
-  const existingUser = await User.findOne({ where: { email } });
+  const existingUser = await User.findOne({ 
+    where: { email },
+    attributes: ['uid', 'email']
+  });
 
   if (existingUser) {
     logger.debug("Email already registered", { email });
@@ -206,8 +213,11 @@ exports.checkPhoneAndSendOtp = asyncHandler(async (req, res) => {
     );
   }
 
-  // Check if phone exists
-  const existingUser = await User.findOne({ where: { phone } });
+  // Check if phone exists (only select necessary columns to avoid missing column errors)
+  const existingUser = await User.findOne({ 
+    where: { phone },
+    attributes: ['uid', 'phone', 'email']
+  });
 
   if (existingUser) {
     return res.status(HTTP_STATUS.BAD_REQUEST).json({
