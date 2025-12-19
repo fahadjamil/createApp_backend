@@ -58,6 +58,20 @@ app.use(sanitize);
 // Serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Root Endpoint
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Create App Backend API",
+    version: "1.0.0",
+    endpoints: {
+      health: "/health",
+      api: "/api/*",
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Health Check Endpoint
 app.get("/health", (req, res) => {
   res.status(200).json({
