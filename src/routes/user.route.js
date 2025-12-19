@@ -14,6 +14,7 @@ const passwordResetLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false }, // Disable validation (handled by trust proxy)
 });
 
 module.exports = (app) => {

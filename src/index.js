@@ -16,6 +16,9 @@ const { sanitize } = require("./middlewares/validate");
 const app = express();
 const PORT = process.env.SERVERPORT || 8080;
 
+// Trust proxy for Vercel/cloud deployments (required for rate limiting)
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet()); // Set security HTTP headers
 
@@ -29,6 +32,7 @@ const limiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false }, // Disable validation (handled by trust proxy)
 });
 app.use("/api/", limiter);
 
