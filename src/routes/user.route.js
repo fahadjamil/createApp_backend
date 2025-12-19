@@ -7,7 +7,7 @@ const { validate, sanitize } = require("../middlewares/validate");
 // Rate limiter for password reset to prevent abuse
 const passwordResetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per 15 minutes
+  max: 20, // limit each IP to 20 requests per 15 minutes (increased for testing)
   message: { 
     success: false, 
     message: "Too many password reset attempts. Please try again later." 
