@@ -502,7 +502,7 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
   });
 
   // Build reset URL - the plain token goes in the URL (user receives this)
-  const frontendUrl = process.env.FRONTEND_URL || "https://createit.pk";
+  const frontendUrl = process.env.FRONTEND_URL || "https://create-app-eight.vercel.app";
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
   // Send email with reset link
