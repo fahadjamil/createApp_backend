@@ -47,6 +47,20 @@ module.exports = (app) => {
     userController.resetPassword
   );
 
+  // ========== Firebase Auth Routes ==========
+
+  // Verify Firebase ID token (for phone auth)
+  router.post(
+    "/firebase-verify",
+    userController.verifyFirebaseToken
+  );
+
+  // Firebase forgot password
+  router.post(
+    "/firebase-forgot-password",
+    userController.firebaseForgotPassword
+  );
+
   // ========== Protected Routes ==========
 
   // Get all users (admin only)

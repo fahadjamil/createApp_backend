@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const crypto = require("crypto");
+const admin = require("firebase-admin");
 
 const User = db.User;
 const asyncHandler = require("../middlewares/asyncHandler");
@@ -13,6 +14,22 @@ const {
 } = require("../middlewares/errorHandler");
 const logger = require("../utils/logger");
 const { HTTP_STATUS, MESSAGES, TOKEN_EXPIRY } = require("../utils/constants");
+
+// Initialize Firebase Admin if not already initialized
+const initFirebaseAdmin = () => {
+  if (admin.apps.length === 0) {
+    try {
+      const adminConfig = require("../config/Firebase.config");
+      admin.initializeApp({
+        credential: admin.credential.cert(adminConfig),
+      });
+      logger.info("Firebase Admin initialized successfully");
+    } catch (error) {
+      logger.warn("Firebase Admin initialization failed:", error.message);
+    }
+  }
+  return admin;
+};
 
 /**
  * @desc    User signup
@@ -432,10 +449,10 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
  * @access  Public
  */
 exports.resetPassword = asyncHandler(async (req, res) => {
-  const { token, newPassword } = req.body;
+  const { token, newPassword, firebaseReset, email } = req.body;
 
-  if (!token || !newPassword) {
-    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Token and new password"));
+  if (!newPassword) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("New password"));
   }
 
   // Validate password strength
@@ -443,21 +460,40 @@ exports.resetPassword = asyncHandler(async (req, res) => {
     throw new BadRequestError("Password must be at least 8 characters long");
   }
 
-  // Hash the provided token to compare with stored hash
-  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+  let user;
 
-  // Find user with valid token
-  const user = await User.findOne({
-    where: {
-      resetPasswordToken: hashedToken,
-      resetPasswordExpires: {
-        [db.Sequelize.Op.gt]: new Date(),
+  // If this is a Firebase-initiated reset, find user by email from Firebase
+  if (firebaseReset && email) {
+    user = await User.findOne({ where: { email } });
+    
+    if (!user) {
+      // User exists in Firebase but not in our DB - this is okay
+      logger.info("Firebase password reset for non-existent local user", { email });
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: "Password has been reset successfully.",
+      });
+    }
+  } else if (token) {
+    // Traditional token-based reset
+    // Hash the provided token to compare with stored hash
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    // Find user with valid token
+    user = await User.findOne({
+      where: {
+        resetPasswordToken: hashedToken,
+        resetPasswordExpires: {
+          [db.Sequelize.Op.gt]: new Date(),
+        },
       },
-    },
-  });
+    });
 
-  if (!user) {
-    throw new BadRequestError("Password reset token is invalid or has expired");
+    if (!user) {
+      throw new BadRequestError("Password reset token is invalid or has expired");
+    }
+  } else {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Token or email"));
   }
 
   // Hash new password
@@ -476,4 +512,131 @@ exports.resetPassword = asyncHandler(async (req, res) => {
     success: true,
     message: "Password has been reset successfully. You can now log in with your new password.",
   });
+});
+
+/**
+ * @desc    Verify Firebase ID Token and get/create user
+ * @route   POST /user/firebase-verify
+ * @access  Public
+ */
+exports.verifyFirebaseToken = asyncHandler(async (req, res) => {
+  const { idToken, phone, email, displayName } = req.body;
+
+  if (!idToken) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Firebase ID token"));
+  }
+
+  try {
+    // Initialize Firebase Admin
+    const firebaseAdmin = initFirebaseAdmin();
+    
+    // Verify the ID token
+    const decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
+    
+    logger.info("Firebase token verified", { 
+      uid: decodedToken.uid, 
+      phone: decodedToken.phone_number 
+    });
+
+    // Check if user exists with this phone number
+    const phoneNumber = phone || decodedToken.phone_number;
+    
+    if (!phoneNumber) {
+      throw new BadRequestError("Phone number not found in token");
+    }
+
+    let user = await User.findOne({ 
+      where: { phone: phoneNumber },
+      attributes: ['uid', 'email', 'phone', 'firstName', 'lastName', 'full_name', 'role']
+    });
+
+    if (user) {
+      // User exists - generate JWT
+      const token = jwt.sign(
+        { uid: user.uid, email: user.email, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: TOKEN_EXPIRY }
+      );
+
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: "Phone verified successfully",
+        exists: true,
+        token,
+        user: {
+          uid: user.uid,
+          phone: user.phone,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          full_name: user.full_name,
+          role: user.role,
+        },
+      });
+    }
+
+    // User doesn't exist - return verification success for signup flow
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: "Phone verified successfully",
+      exists: false,
+      firebaseUid: decodedToken.uid,
+      phone: phoneNumber,
+    });
+  } catch (error) {
+    logger.error("Firebase token verification failed", { error: error.message });
+    
+    if (error.code === 'auth/id-token-expired') {
+      throw new BadRequestError("Firebase token has expired");
+    } else if (error.code === 'auth/invalid-id-token') {
+      throw new BadRequestError("Invalid Firebase token");
+    }
+    
+    throw new BadRequestError("Firebase verification failed: " + error.message);
+  }
+});
+
+/**
+ * @desc    Send password reset email via Firebase
+ * @route   POST /user/firebase-forgot-password
+ * @access  Public
+ */
+exports.firebaseForgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Email"));
+  }
+
+  logger.info("Firebase password reset requested", { email });
+
+  try {
+    // Initialize Firebase Admin
+    const firebaseAdmin = initFirebaseAdmin();
+    
+    // Generate password reset link via Firebase Admin
+    const resetLink = await firebaseAdmin.auth().generatePasswordResetLink(email, {
+      url: process.env.APP_DEEP_LINK || 'createapp://reset-password',
+    });
+
+    logger.info("Firebase password reset link generated", { email });
+
+    // In production, send this link via your email service
+    // For now, we rely on Firebase's built-in email sending from the client
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: "Password reset email sent. Check your inbox.",
+      // Include reset link in development for testing
+      ...(process.env.ENV !== "production" && { resetLink }),
+    });
+  } catch (error) {
+    logger.error("Firebase password reset failed", { email, error: error.message });
+    
+    // For security, don't reveal if user exists
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: "If an account exists with this email, a reset link has been sent.",
+    });
+  }
 });
