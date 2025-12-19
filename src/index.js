@@ -70,6 +70,11 @@ db.sequelize
   .authenticate()
   .then(() => {
     logger.info("Database connected successfully");
+    // Sync database schema (alter: true adds missing columns without dropping data)
+    return db.sequelize.sync({ alter: true });
+  })
+  .then(() => {
+    logger.info("Database schema synced successfully");
   })
   .catch((err) => {
     logger.error("Database connection failed", { error: err.message });
