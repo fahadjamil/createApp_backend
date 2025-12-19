@@ -3,138 +3,40 @@ const Project = db.Project;
 const DraftProject = db.DraftProject;
 const Client = db.Client;
 
-const upload = require("../middlewares/upload");
-const { cloudinary } = require("../config/cloudinary");
+const asyncHandler = require("../middlewares/asyncHandler");
+const {
+  BadRequestError,
+  NotFoundError,
+  ForbiddenError,
+} = require("../middlewares/errorHandler");
+const logger = require("../utils/logger");
+const {
+  HTTP_STATUS,
+  MESSAGES,
+  PROTECTED_PROJECT_STATUSES,
+  UPDATABLE_PROJECT_FIELDS,
+  DELAYED_PROJECT_FIELDS,
+  DISPUTE_PROJECT_FIELDS,
+} = require("../utils/constants");
 
-// ✅ Create or Update Project + Sync Client
-exports.Newproject = async (req, res) => {
-  try {
-    console.log("📌 Newproject API hit");
-
-    const requiredFields = [
-      "projectName",
-      "projectType",
-      "clientName",
-      "client",
-      "startDate",
-      "endDate",
-    ];
-
-    // If creating new project → validate required fields
-    if (!req.body.pid) {
-      const missingFields = requiredFields.filter(
-        (field) => !req.body[field] || req.body[field].toString().trim() === ""
-      );
-
-      if (missingFields.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: "❌ Missing required fields",
-          missing: missingFields,
-        });
-      }
-    }
-
-    if (!req.body.userId) {
-      return res.status(400).json({
-        success: false,
-        message: "❌ userId is required (project must belong to a user)",
-      });
-    }
-
-    let project;
-
-    if (req.body.pid) {
-      // 🔹 Update existing project
-      project = await Project.findOne({ where: { pid: req.body.pid } });
-
-      if (!project) {
-        return res.status(404).json({ message: "❌ Project not found" });
-      }
-
-      await project.update({
-        ...req.body,
-        userId: req.body.userId,
-      });
-
-      // ✅ Remove from draft if exists
-      await DraftProject.destroy({ where: { dpid: req.body.pid } });
-    } else {
-      // 🔹 Create new project
-      project = await Project.create({
-        ...req.body,
-        userId: req.body.userId,
-      });
-
-      // ✅ Remove draft if exists
-      if (req.body.dpid || req.body.pid) {
-        await DraftProject.destroy({
-          where: { dpid: req.body.dpid || req.body.pid },
-        });
-      }
-    }
-
-    // 🔹 Sync client (link with project ID)
-    const client = await syncClient({ ...req.body, projectId: project.pid });
-
-    return res.status(req.body.pid ? 200 : 201).json({
-      success: true,
-      message: `✅ Project ${
-        req.body.pid ? "updated" : "created"
-      } successfully (client synced, draft removed)`,
-      project,
-      client,
-    });
-  } catch (error) {
-    console.error("❌ Error in Newproject:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Something went wrong while creating/updating project",
-      error: error.message,
-    });
-  }
-};
-
-// 🔹 Client sync logic (unique by phone + store userId)
-// Accepts both contact* and point* field names from mobile app
+/**
+ * Client sync logic (unique by phone + store userId)
+ * Accepts both contact* and point* field names from mobile app
+ */
 const syncClient = async (data) => {
   try {
-    console.log("🔷 ========== CLIENT SYNC START ==========");
-    console.log("📥 Incoming data payload:", JSON.stringify({
-      contactNumber: data.contactNumber,
-      pointMobile: data.pointMobile,
-      clientName: data.clientName,
-      client: data.client,
-      contactBrand: data.contactBrand,
-      pointBrand: data.pointBrand,
-      contactEmail: data.contactEmail,
-      pointEmail: data.pointEmail,
-      contactName: data.contactName,
-      pointName: data.pointName,
-      contactRole: data.contactRole,
-      pointRole: data.pointRole,
-      projectId: data.projectId,
-      userId: data.userId,
-    }, null, 2));
+    logger.debug("Client sync started", { projectId: data.projectId });
 
     // Support both naming conventions: contactNumber OR pointMobile
     const phone = data.contactNumber || data.pointMobile;
-    
+
     if (!phone) {
-      console.log("⚠️ No phone provided (contactNumber/pointMobile), skipping client sync");
-      console.log("🔷 ========== CLIENT SYNC END (SKIPPED) ==========");
+      logger.debug("No phone provided, skipping client sync");
       return null;
     }
 
-    if (!data.projectId) {
-      console.log("⚠️ No projectId provided, skipping client sync");
-      console.log("🔷 ========== CLIENT SYNC END (SKIPPED) ==========");
-      return null;
-    }
-
-    if (!data.userId) {
-      console.log("⚠️ No userId provided, skipping client sync");
-      console.log("🔷 ========== CLIENT SYNC END (SKIPPED) ==========");
+    if (!data.projectId || !data.userId) {
+      logger.debug("Missing projectId or userId, skipping client sync");
       return null;
     }
 
@@ -151,453 +53,413 @@ const syncClient = async (data) => {
       userId: data.userId,
     };
 
-    console.log("📋 Prepared client data:", JSON.stringify(clientData, null, 2));
-
-    // 🔍 Find client by phone
+    // Find client by phone
     let client = await Client.findOne({
-      where: {
-        phone: phone,
-        userId: data.userId,
-      },
+      where: { phone, userId: data.userId },
     });
-
-    console.log("🔍 Existing client found:", client ? "YES" : "NO");
 
     if (client) {
       await client.update(clientData);
-      console.log(`🔄 Existing client UPDATED`);
+      logger.debug("Client updated", { clientId: client.cid });
     } else {
       client = await Client.create(clientData);
-      console.log(`✅ New client CREATED`);
+      logger.debug("Client created", { clientId: client.cid });
     }
-
-    console.log("📤 Client response:", JSON.stringify(client.toJSON(), null, 2));
-    console.log("🔷 ========== CLIENT SYNC END (SUCCESS) ==========");
 
     return client;
   } catch (err) {
-    console.error("❌ Client sync FAILED:", err.message);
-    console.error("❌ Full error:", err);
-    console.log("🔷 ========== CLIENT SYNC END (ERROR) ==========");
+    logger.error("Client sync failed", { error: err.message });
     return null;
   }
 };
 
-// ✅ Get all projects
-exports.allprojects = async (req, res) => {
-  try {
-    // ✅ Get logged-in userId (from token or request body/query)
-    const userId = req.user?.id || req.query.userId || req.body.userId;
+/**
+ * @desc    Create or Update Project + Sync Client
+ * @route   POST /project/new_project
+ * @access  Private
+ */
+exports.Newproject = asyncHandler(async (req, res) => {
+  logger.info("Create/Update project request");
 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required",
-      });
+  const requiredFields = [
+    "projectName",
+    "projectType",
+    "clientName",
+    "client",
+    "startDate",
+    "endDate",
+  ];
+
+  // Validate required fields for new projects
+  if (!req.body.pid) {
+    const missingFields = requiredFields.filter(
+      (field) => !req.body[field] || req.body[field].toString().trim() === ""
+    );
+
+    if (missingFields.length > 0) {
+      throw new BadRequestError(`Missing required fields: ${missingFields.join(", ")}`);
     }
-
-    // ✅ Fetch projects of this user only
-    const projects = await Project.findAll({
-      where: { userId }, // filter by logged-in user
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Projects fetched successfully",
-      data: projects,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching projects:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch projects",
-      error: error.message,
-    });
   }
-};
 
-exports.uploadProjectPictures = async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: "No files uploaded" });
+  if (!req.body.userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("userId"));
+  }
+
+  let project;
+
+  if (req.body.pid) {
+    // Update existing project
+    project = await Project.findOne({ where: { pid: req.body.pid } });
+
+    if (!project) {
+      throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Project"));
     }
 
-    let project;
-
-    // If projectId exists, update that project
-    if (req.body.projectId) {
-      project = await Project.findOne({ where: { pid: req.body.projectId } });
-      if (!project) {
-        return res.status(404).json({ message: "Project not found" });
-      }
-    } else {
-      // Create a new project
-      project = await Project.create({
-        userId: req.body.userId || null,
-        projectName: req.body.projectName || "Untitled Project",
-        projectType: req.body.projectType || "General",
-        client: req.body.client || "Unknown",
-        status: req.body.status || "Pending",
-        startDate: new Date(),
-        endDate: new Date(),
-        media: JSON.stringify([]),
-      });
-    }
-
-    // Extract Cloudinary URLs from uploaded files
-    const uploadedUrls = req.files.map((file) => file.path); // file.path is the Cloudinary URL
-
-    // Merge with existing media
-    let existingMedia = [];
-    if (project.media) {
-      try {
-        existingMedia = JSON.parse(project.media);
-      } catch {
-        existingMedia = [];
-      }
-    }
-
-    // Save updated media list
     await project.update({
-      media: JSON.stringify([...existingMedia, ...uploadedUrls]),
+      ...req.body,
+      userId: req.body.userId,
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "✅ Pictures uploaded successfully to Cloudinary",
-      project,
+    // Remove from draft if exists
+    await DraftProject.destroy({ where: { dpid: req.body.pid } });
+    logger.info("Project updated", { projectId: project.pid });
+  } else {
+    // Create new project
+    project = await Project.create({
+      ...req.body,
+      userId: req.body.userId,
     });
-  } catch (error) {
-    console.error("❌ Error uploading pictures:", error);
-    return res.status(500).json({ message: error.message });
+
+    // Remove draft if exists
+    if (req.body.dpid || req.body.pid) {
+      await DraftProject.destroy({
+        where: { dpid: req.body.dpid || req.body.pid },
+      });
+    }
+    logger.info("Project created", { projectId: project.pid });
   }
-};
 
-// Get single project by ID
-exports.getProjectById = async (req, res) => {
-  try {
-    const { id } = req.params;
+  // Sync client
+  const client = await syncClient({ ...req.body, projectId: project.pid });
 
-    // Find project by primary key
-    const project = await Project.findOne({ where: { pid: id } });
+  res.status(req.body.pid ? HTTP_STATUS.OK : HTTP_STATUS.CREATED).json({
+    success: true,
+    message: MESSAGES.SUCCESS[req.body.pid ? "UPDATED" : "CREATED"]("Project"),
+    project,
+    client,
+  });
+});
 
+/**
+ * @desc    Get all projects for user
+ * @route   POST /project/all_projects
+ * @access  Private
+ */
+exports.allprojects = asyncHandler(async (req, res) => {
+  const userId = req.user?.uid || req.query.userId || req.body.userId;
+
+  if (!userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
+  }
+
+  const projects = await Project.findAll({
+    where: { userId },
+    order: [["createdAt", "DESC"]],
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Projects"),
+    count: projects.length,
+    data: projects,
+  });
+});
+
+/**
+ * @desc    Upload project pictures
+ * @route   POST /project/upload_pictures
+ * @access  Private
+ */
+exports.uploadProjectPictures = asyncHandler(async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    throw new BadRequestError("No files uploaded");
+  }
+
+  let project;
+
+  if (req.body.projectId) {
+    project = await Project.findOne({ where: { pid: req.body.projectId } });
     if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: "❌ Project not found",
-      });
+      throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Project"));
     }
-
-    res.status(200).json({
-      success: true,
-      message: "✅ Project fetched successfully",
-      data: project,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching project:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch project",
-      error: error.message,
+  } else {
+    project = await Project.create({
+      userId: req.body.userId || null,
+      projectName: req.body.projectName || "Untitled Project",
+      projectType: req.body.projectType || "General",
+      client: req.body.client || "Unknown",
+      status: req.body.status || "Pending",
+      startDate: new Date(),
+      endDate: new Date(),
+      media: JSON.stringify([]),
     });
   }
-};
 
-// ✅ Update project
-exports.updateProject = async (req, res) => {
-  try {
-    const { id } = req.params;
+  // Extract Cloudinary URLs
+  const uploadedUrls = req.files.map((file) => file.path);
 
-    // check if project exists
-    const project = await Project.findByPk(id);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
+  // Merge with existing media
+  let existingMedia = [];
+  if (project.media) {
+    try {
+      existingMedia = JSON.parse(project.media);
+    } catch {
+      existingMedia = [];
     }
-
-    // Check current project status
-    const currentStatus = (project.projectStatus || project.status || "").toLowerCase();
-    const isDelayed = currentStatus === "delayed";
-    const isInDispute = currentStatus === "in dispute";
-
-    // ✅ whitelist fields you allow to update (to avoid overwriting system fields like userId, createdAt)
-    let updatableFields = [
-      "projectName",
-      "projectType",
-      "clientName",
-      "client",
-      "startDate",
-      "endDate",
-      "description",
-      "tags",
-      "media",
-      "projectStatus",
-    ];
-
-    // If project is delayed, only allow updating endDate and projectStatus
-    if (isDelayed) {
-      console.log("⚠️ Project is delayed - only endDate update allowed");
-      updatableFields = ["endDate", "projectStatus"];
-    }
-
-    // If project is in dispute, only allow updating tags, media, and projectStatus
-    if (isInDispute) {
-      console.log("⚠️ Project is in dispute - only tags and media update allowed");
-      updatableFields = ["tags", "media", "projectStatus"];
-    }
-
-    const updates = {};
-    updatableFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
-      }
-    });
-
-    // update only safe fields
-    await project.update(updates);
-
-    res.status(200).json({
-      success: true,
-      message: isDelayed 
-        ? "Project end date updated successfully (project is delayed)" 
-        : "Project updated successfully",
-      project,
-    });
-  } catch (error) {
-    console.error("Update project error:", error);
-    res.status(500).json({ message: "Internal server error" });
   }
-};
 
-//  add Draft project
-// 📌 Create or Update Draft Project
-exports.DraftProject = async (req, res) => {
-  try {
-    console.log("📌 make draft project");
+  await project.update({
+    media: JSON.stringify([...existingMedia, ...uploadedUrls]),
+  });
 
-    const {
-      pid,
-      userId,
-      startDate,
-      endDate,
-      dueDate,
-      paymentStartDate,
-      ...rest
-    } = req.body;
+  logger.info("Pictures uploaded", { projectId: project.pid, count: uploadedUrls.length });
 
-    if (!userId) {
-      return res.status(400).json({ message: "❌ userId is required" });
-    }
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "Pictures uploaded successfully",
+    project,
+  });
+});
 
-    // ✅ helper to validate/convert date
-    const parseDateOrNull = (date) => {
-      if (!date) return null;
-      const d = new Date(date);
-      return isNaN(d.getTime()) ? null : d; // Sequelize can take JS Date objects
-    };
+/**
+ * @desc    Get single project by ID
+ * @route   GET /project/:id
+ * @access  Private
+ */
+exports.getProjectById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-    const payload = {
-      dpid: pid,
-      userId,
-      ...rest,
-      startDate: parseDateOrNull(startDate),
-      endDate: parseDateOrNull(endDate),
-      dueDate: parseDateOrNull(dueDate),
-      paymentStartDate: parseDateOrNull(paymentStartDate),
-    };
+  const project = await Project.findOne({ where: { pid: id } });
 
-    const [draft, created] = await DraftProject.upsert(payload, {
-      returning: true,
-    });
-
-    return res.status(created ? 201 : 200).json({
-      success: true,
-      message: created
-        ? "✅ Project draft created successfully"
-        : "✅ Project draft updated successfully",
-      draft,
-    });
-  } catch (error) {
-    console.error("❌ Error in DraftProject:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Something went wrong while creating/updating project",
-      error: error.message,
-    });
+  if (!project) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Project"));
   }
-};
 
-// Set all Draft project
-exports.allDraftprojects = async (req, res) => {
-  try {
-    const userId = req.user?.id || req.query.userId || req.body.userId;
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Project"),
+    data: project,
+  });
+});
 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required",
-      });
-    }
+/**
+ * @desc    Update project
+ * @route   PUT /project/update_project/:id
+ * @access  Private
+ */
+exports.updateProject = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-    const draftProjects = await DraftProject.findAll({
-      where: { userId },
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "Draft Projects fetched successfully",
-      data: draftProjects,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching projects:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch projects",
-      error: error.message,
-    });
+  const project = await Project.findByPk(id);
+  if (!project) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Project"));
   }
-};
 
-// 📌 Get Single Draft Project by ID
-exports.getSingleDraftProject = async (req, res) => {
-  try {
-    const { id } = req.params; // draft project id
-    const userId =
-      req.user?.uid || req.user?.id || req.query.userId || req.body.userId;
+  // Check current project status
+  const currentStatus = (project.projectStatus || project.status || "").toLowerCase();
+  const isDelayed = currentStatus === "delayed";
+  const isInDispute = currentStatus === "in dispute";
 
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Draft project ID is required",
-      });
-    }
+  // Determine updatable fields based on status
+  let updatableFields = [...UPDATABLE_PROJECT_FIELDS];
 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required",
-      });
-    }
-
-    const draftProject = await DraftProject.findOne({
-      where: { dpid: id, userId },
-    });
-
-    if (!draftProject) {
-      return res.status(404).json({
-        success: false,
-        message: "❌ Draft project not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "✅ Draft project fetched successfully",
-      data: draftProject,
-    });
-  } catch (error) {
-    console.error("❌ Error fetching single project:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch draft project",
-      error: error.message,
-    });
+  if (isDelayed) {
+    logger.debug("Project is delayed - only endDate update allowed");
+    updatableFields = [...DELAYED_PROJECT_FIELDS];
   }
-};
 
-// 📌 Delete Project by ID
-exports.deleteProject = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Project ID is required",
-      });
-    }
-
-    console.log("🗑️ Attempting to delete project:", id);
-
-    // Find the project first
-    const project = await Project.findOne({ where: { pid: id } });
-
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: "❌ Project not found",
-      });
-    }
-
-    // Prevent deletion of signed or completed projects
-    const projectStatus = (project.projectStatus || project.status || "").toLowerCase();
-    const protectedStatuses = ["signed", "completed"];
-    
-    if (protectedStatuses.includes(projectStatus)) {
-      console.log("⚠️ Cannot delete project with status:", projectStatus);
-      return res.status(403).json({
-        success: false,
-        message: "❌ Projects that are signed or completed cannot be deleted",
-      });
-    }
-
-    // Delete the project
-    await project.destroy();
-
-    console.log("✅ Project deleted successfully:", id);
-
-    return res.status(200).json({
-      success: true,
-      message: "✅ Project deleted successfully",
-    });
-  } catch (error) {
-    console.error("❌ Error deleting project:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete project",
-      error: error.message,
-    });
+  if (isInDispute) {
+    logger.debug("Project is in dispute - only tags and media update allowed");
+    updatableFields = [...DISPUTE_PROJECT_FIELDS];
   }
-};
 
-// 📌 Delete Draft Project by ID
-exports.deleteDraftProject = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Draft project ID is required",
-      });
+  const updates = {};
+  updatableFields.forEach((field) => {
+    if (req.body[field] !== undefined) {
+      updates[field] = req.body[field];
     }
+  });
 
-    console.log("🗑️ Attempting to delete draft project:", id);
+  await project.update(updates);
+  logger.info("Project updated", { projectId: id });
 
-    // Find the draft project first
-    const draftProject = await DraftProject.findOne({ where: { dpid: id } });
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: isDelayed
+      ? "Project end date updated successfully (project is delayed)"
+      : MESSAGES.SUCCESS.UPDATED("Project"),
+    project,
+  });
+});
 
-    if (!draftProject) {
-      return res.status(404).json({
-        success: false,
-        message: "❌ Draft project not found",
-      });
-    }
+/**
+ * @desc    Create or Update Draft Project
+ * @route   POST /project/draftProject
+ * @access  Private
+ */
+exports.DraftProject = asyncHandler(async (req, res) => {
+  logger.info("Create/Update draft project");
 
-    // Delete the draft project
-    await draftProject.destroy();
+  const { pid, userId, startDate, endDate, dueDate, paymentStartDate, ...rest } = req.body;
 
-    console.log("✅ Draft project deleted successfully:", id);
-
-    return res.status(200).json({
-      success: true,
-      message: "✅ Draft project deleted successfully",
-    });
-  } catch (error) {
-    console.error("❌ Error deleting draft project:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete draft project",
-      error: error.message,
-    });
+  if (!userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("userId"));
   }
-};
+
+  // Helper to validate/convert date
+  const parseDateOrNull = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const payload = {
+    dpid: pid,
+    userId,
+    ...rest,
+    startDate: parseDateOrNull(startDate),
+    endDate: parseDateOrNull(endDate),
+    dueDate: parseDateOrNull(dueDate),
+    paymentStartDate: parseDateOrNull(paymentStartDate),
+  };
+
+  const [draft, created] = await DraftProject.upsert(payload, {
+    returning: true,
+  });
+
+  logger.info(created ? "Draft created" : "Draft updated", { draftId: draft.dpid });
+
+  res.status(created ? HTTP_STATUS.CREATED : HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS[created ? "CREATED" : "UPDATED"]("Draft project"),
+    draft,
+  });
+});
+
+/**
+ * @desc    Get all draft projects for user
+ * @route   POST /project/all_draftProject
+ * @access  Private
+ */
+exports.allDraftprojects = asyncHandler(async (req, res) => {
+  const userId = req.user?.uid || req.query.userId || req.body.userId;
+
+  if (!userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
+  }
+
+  const draftProjects = await DraftProject.findAll({
+    where: { userId },
+    order: [["createdAt", "DESC"]],
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Draft projects"),
+    count: draftProjects.length,
+    data: draftProjects,
+  });
+});
+
+/**
+ * @desc    Get single draft project by ID
+ * @route   GET /project/draft/:id
+ * @access  Private
+ */
+exports.getSingleDraftProject = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.uid || req.query.userId || req.body.userId;
+
+  if (!id) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Draft project ID"));
+  }
+
+  if (!userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
+  }
+
+  const draftProject = await DraftProject.findOne({
+    where: { dpid: id, userId },
+  });
+
+  if (!draftProject) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Draft project"));
+  }
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Draft project"),
+    data: draftProject,
+  });
+});
+
+/**
+ * @desc    Delete project by ID
+ * @route   DELETE /project/delete_project/:id
+ * @access  Private
+ */
+exports.deleteProject = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Project ID"));
+  }
+
+  const project = await Project.findOne({ where: { pid: id } });
+
+  if (!project) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Project"));
+  }
+
+  // Prevent deletion of protected projects
+  const projectStatus = (project.projectStatus || project.status || "").toLowerCase();
+
+  if (PROTECTED_PROJECT_STATUSES.includes(projectStatus)) {
+    throw new ForbiddenError("Projects that are signed or completed cannot be deleted");
+  }
+
+  await project.destroy();
+  logger.info("Project deleted", { projectId: id });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.DELETED("Project"),
+  });
+});
+
+/**
+ * @desc    Delete draft project by ID
+ * @route   DELETE /project/delete_draft/:id
+ * @access  Private
+ */
+exports.deleteDraftProject = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Draft project ID"));
+  }
+
+  const draftProject = await DraftProject.findOne({ where: { dpid: id } });
+
+  if (!draftProject) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Draft project"));
+  }
+
+  await draftProject.destroy();
+  logger.info("Draft project deleted", { draftId: id });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.DELETED("Draft project"),
+  });
+});

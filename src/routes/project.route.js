@@ -1,41 +1,88 @@
+const router = require("express").Router();
+const projectController = require("../controllers/project.controller");
+const upload = require("../middlewares/upload");
+const { authenticate, optionalAuth } = require("../middlewares/auth");
+const { validate, sanitize } = require("../middlewares/validate");
+
 module.exports = (app) => {
-  const router = require("express").Router();
-  const projectController = require("../controllers/project.controller");
-  const upload = require("../middlewares/upload");
+  // Apply sanitization to all routes
+  router.use(sanitize);
 
-  // Create new project
-  router.post("/new_project", projectController.Newproject);
+  // ========== Project Routes ==========
 
-  // Get all projects
-  router.post("/all_projects", projectController.allprojects);
+  // Create new project (authenticated)
+  router.post(
+    "/new_project",
+    optionalAuth, // Use optionalAuth for backward compatibility
+    validate("createProject"),
+    projectController.Newproject
+  );
 
-  // Multiple images upload
+  // Get all projects for a user (authenticated)
+  router.post(
+    "/all_projects",
+    optionalAuth,
+    projectController.allprojects
+  );
+
+  // Get single project by ID
+  router.get(
+    "/:id",
+    optionalAuth,
+    projectController.getProjectById
+  );
+
+  // Update project (authenticated)
+  router.put(
+    "/update_project/:id",
+    optionalAuth,
+    projectController.updateProject
+  );
+
+  // Delete project (authenticated)
+  router.delete(
+    "/delete_project/:id",
+    optionalAuth,
+    projectController.deleteProject
+  );
+
+  // Multiple images upload (authenticated)
   router.post(
     "/upload_pictures",
-    upload.array("images", 5), // 'images' should match form field name
+    optionalAuth,
+    upload.array("images", 5),
     projectController.uploadProjectPictures
   );
 
-  // Get single Project
-  router.get("/:id", projectController.getProjectById);
+  // ========== Draft Project Routes ==========
 
-  // Update project
-  router.put("/update_project/:id", projectController.updateProject);
+  // Create/Update draft project
+  router.post(
+    "/draftProject",
+    optionalAuth,
+    projectController.DraftProject
+  );
 
-  // Delete project
-  router.delete("/delete_project/:id", projectController.deleteProject);
-
-  // Create draft project
-  router.post("/draftProject", projectController.DraftProject);
-
-  // get draft project
-  router.post("/all_draftProject", projectController.allDraftprojects);
+  // Get all draft projects for a user
+  router.post(
+    "/all_draftProject",
+    optionalAuth,
+    projectController.allDraftprojects
+  );
 
   // Get single draft by ID
-  router.get("/draft/:id", projectController.getSingleDraftProject);
+  router.get(
+    "/draft/:id",
+    optionalAuth,
+    projectController.getSingleDraftProject
+  );
 
   // Delete draft project
-  router.delete("/delete_draft/:id", projectController.deleteDraftProject);
+  router.delete(
+    "/delete_draft/:id",
+    optionalAuth,
+    projectController.deleteDraftProject
+  );
 
   // Mount router on /project
   app.use("/project", router);

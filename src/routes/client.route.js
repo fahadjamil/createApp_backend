@@ -1,25 +1,56 @@
+const router = require("express").Router();
 const clientController = require("../controllers/client.controller");
+const { authenticate, optionalAuth } = require("../middlewares/auth");
+const { validate, sanitize } = require("../middlewares/validate");
 
 module.exports = (app) => {
-  const router = require("express").Router();
+  // Apply sanitization to all routes
+  router.use(sanitize);
 
-  // Create client
-  router.post("/new_client", clientController.createClient);
+  // ========== Client Routes ==========
 
-  // Get all clients (POST with userId in body - matching mobile app pattern)
-  router.post("/all_clients", clientController.getClientsByUserPost);
+  // Create new client (authenticated)
+  router.post(
+    "/new_client",
+    optionalAuth,
+    validate("createClient"),
+    clientController.createClient
+  );
 
-  // Get all clients (admin level)
-  router.get("/all", clientController.getAllClients);
+  // Get all clients (admin)
+  router.get(
+    "/all",
+    authenticate,
+    clientController.getAllClients
+  );
+
+  // Get all clients for a user (POST - used by mobile)
+  router.post(
+    "/all_clients",
+    optionalAuth,
+    clientController.getClientsByUserPost
+  );
+
+  // Get all clients for a user (GET)
+  router.get(
+    "/user/:userId",
+    optionalAuth,
+    clientController.getClientsByUser
+  );
 
   // Get single client by ID
-  router.get("/:id", clientController.getClientById);
+  router.get(
+    "/:id",
+    optionalAuth,
+    clientController.getClientById
+  );
 
-  // Update client
-  router.put("/:id", clientController.updateClient);
-
-  // Get clients by userId (GET with param)
-  router.get("/user/:userId", clientController.getClientsByUser);
+  // Update client (authenticated)
+  router.put(
+    "/:id",
+    optionalAuth,
+    clientController.updateClient
+  );
 
   // Mount router on /client
   app.use("/client", router);

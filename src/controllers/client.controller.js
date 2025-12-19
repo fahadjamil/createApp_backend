@@ -2,266 +2,240 @@ const db = require("../models");
 const Client = db.Client;
 const Project = db.Project;
 
-/* ======================================================
-   ✅ CREATE NEW CLIENT (userId required)
-====================================================== */
-exports.createClient = async (req, res) => {
-  try {
-    const {
-      fullName,
-      clientType,
-      company,
-      email,
-      phone,
-      address,
-      contactPersonName,
-      contactPersonRole,
-      userId,
-    } = req.body;
+const asyncHandler = require("../middlewares/asyncHandler");
+const {
+  BadRequestError,
+  NotFoundError,
+  ConflictError,
+} = require("../middlewares/errorHandler");
+const logger = require("../utils/logger");
+const { HTTP_STATUS, MESSAGES } = require("../utils/constants");
 
-    // Basic validation
-    if (!fullName || !clientType || !phone || !userId) {
-      return res.status(400).json({
-        message: "Full name, client type, phone and userId are required fields.",
-      });
-    }
+/**
+ * @desc    Create new client
+ * @route   POST /client/new_client
+ * @access  Private
+ */
+exports.createClient = asyncHandler(async (req, res) => {
+  const {
+    fullName,
+    clientType,
+    company,
+    email,
+    phone,
+    address,
+    contactPersonName,
+    contactPersonRole,
+    userId,
+  } = req.body;
 
-    // 🔍 Check duplicate phone for this user
-    const existingClient = await Client.findOne({
-      where: { phone, userId },
-    });
+  logger.info("Create client request", { userId });
 
-    if (existingClient) {
-      return res.status(409).json({
-        message: "A client with this phone number already exists for this user.",
-      });
-    }
+  // Check duplicate phone for this user
+  const existingClient = await Client.findOne({
+    where: { phone, userId },
+  });
 
-    // Create new client
-    const client = await Client.create({
-      fullName,
-      clientType,
-      company,
-      email,
-      phone,
-      address,
-      contactPersonName,
-      contactPersonRole,
-      userId,
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Client created successfully",
-      client,
-    });
-  } catch (err) {
-    console.error("❌ Error creating client:", err);
-    return res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
-    });
+  if (existingClient) {
+    throw new ConflictError("A client with this phone number already exists for this user");
   }
-};
 
-/* ======================================================
-   ✅ GET ALL CLIENTS (admin level)
-====================================================== */
-exports.getAllClients = async (req, res) => {
-  try {
-    const clients = await Client.findAll({
-      order: [["createdAt", "DESC"]],
-      include: [
-        {
-          model: Project,
-          as: "project",
-          required: false,
-          attributes: ["pid", "projectName", "projectType", "startDate", "endDate"],
-        },
-      ],
-    });
+  const client = await Client.create({
+    fullName,
+    clientType,
+    company,
+    email,
+    phone,
+    address,
+    contactPersonName,
+    contactPersonRole,
+    userId,
+  });
 
-    return res.status(200).json(clients);
-  } catch (err) {
-    console.error("❌ Error fetching clients:", err);
-    return res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
-    });
+  logger.info("Client created", { clientId: client.cid });
+
+  res.status(HTTP_STATUS.CREATED).json({
+    success: true,
+    message: MESSAGES.SUCCESS.CREATED("Client"),
+    client,
+  });
+});
+
+/**
+ * @desc    Get all clients (admin)
+ * @route   GET /client/all
+ * @access  Private (Admin)
+ */
+exports.getAllClients = asyncHandler(async (req, res) => {
+  const clients = await Client.findAll({
+    order: [["createdAt", "DESC"]],
+    include: [
+      {
+        model: Project,
+        as: "project",
+        required: false,
+        attributes: ["pid", "projectName", "projectType", "startDate", "endDate"],
+      },
+    ],
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Clients"),
+    count: clients.length,
+    clients,
+  });
+});
+
+/**
+ * @desc    Get single client by ID
+ * @route   GET /client/:id
+ * @access  Private
+ */
+exports.getClientById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const client = await Client.findByPk(id, {
+    include: [
+      {
+        model: Project,
+        as: "project",
+        required: false,
+        attributes: ["pid", "projectName", "projectType", "startDate", "endDate"],
+      },
+    ],
+  });
+
+  if (!client) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Client"));
   }
-};
 
-/* ======================================================
-   ✅ GET SINGLE CLIENT BY ID
-====================================================== */
-exports.getClientById = async (req, res) => {
-  try {
-    const { id } = req.params;
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Client"),
+    client,
+  });
+});
 
-    const client = await Client.findByPk(id, {
-      include: [
-        {
-          model: Project,
-          as: "project",
-          required: false,
-          attributes: ["pid", "projectName", "projectType", "startDate", "endDate"],
-        },
-      ],
-    });
+/**
+ * @desc    Update client
+ * @route   PUT /client/:id
+ * @access  Private
+ */
+exports.updateClient = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const {
+    fullName,
+    clientType,
+    company,
+    email,
+    phone,
+    address,
+    contactPersonName,
+    contactPersonRole,
+  } = req.body;
 
-    if (!client) {
-      return res.status(404).json({ message: "Client not found" });
-    }
+  logger.info("Update client request", { clientId: id });
 
-    return res.status(200).json(client);
-  } catch (err) {
-    console.error("❌ Error fetching client:", err);
-    return res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
-    });
+  const client = await Client.findOne({ where: { cid: id } });
+
+  if (!client) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Client"));
   }
-};
 
-/* ======================================================
-   ✅ UPDATE CLIENT
-====================================================== */
-exports.updateClient = async (req, res) => {
-  try {
-    const { id } = req.params;
+  // Check for duplicate phone
+  if (phone && phone !== client.phone) {
+    const duplicate = await Client.findOne({
+      where: { phone, userId: client.userId },
+    });
 
-    const {
-      fullName,
-      clientType,
-      company,
-      email,
-      phone,
-      address,
-      contactPersonName,
-      contactPersonRole,
-    } = req.body;
-
-    const client = await Client.findOne({ where: { cid: id } });
-
-    if (!client) {
-      return res.status(404).json({
-        message: "Client not found",
-      });
+    if (duplicate) {
+      throw new ConflictError("Another client with this phone number already exists");
     }
-
-    // 🔍 prevent duplicate phone number
-    if (phone && phone !== client.phone) {
-      const duplicate = await Client.findOne({
-        where: { phone },
-      });
-
-      if (duplicate) {
-        return res.status(409).json({
-          message: "Another client with this phone number already exists.",
-        });
-      }
-    }
-
-    // Update client
-    await client.update({
-      fullName,
-      clientType,
-      company,
-      email,
-      phone,
-      address,
-      contactPersonName,
-      contactPersonRole,
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: "Client updated successfully",
-      client,
-    });
-  } catch (err) {
-    console.error("❌ Error updating client:", err);
-    return res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
-    });
   }
-};
 
-/* ======================================================
-   ✅ GET ALL CLIENTS OF A SPECIFIC USER (GET - userId from params)
-====================================================== */
-exports.getClientsByUser = async (req, res) => {
-  try {
-    const { userId } = req.params;
+  await client.update({
+    fullName,
+    clientType,
+    company,
+    email,
+    phone,
+    address,
+    contactPersonName,
+    contactPersonRole,
+  });
 
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
+  logger.info("Client updated", { clientId: id });
 
-    const clients = await Client.findAll({
-      where: { userId },
-      order: [["createdAt", "DESC"]],
-      include: [
-        {
-          model: Project,
-          as: "project",
-          required: false,
-          attributes: ["pid", "projectName", "projectType", "startDate", "endDate", "projectAmount"],
-        },
-      ],
-    });
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.UPDATED("Client"),
+    client,
+  });
+});
 
-    return res.status(200).json({
-      success: true,
-      count: clients.length,
-      clients,
-    });
-  } catch (err) {
-    console.error("❌ Error fetching user clients:", err);
-    return res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
-    });
+/**
+ * @desc    Get all clients for a user (GET)
+ * @route   GET /client/user/:userId
+ * @access  Private
+ */
+exports.getClientsByUser = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
   }
-};
 
-/* ======================================================
-   ✅ GET ALL CLIENTS OF A SPECIFIC USER (POST - userId from body)
-   Used by mobile app: POST /client/all_clients
-====================================================== */
-exports.getClientsByUserPost = async (req, res) => {
-  try {
-    const { userId } = req.body;
+  const clients = await Client.findAll({
+    where: { userId },
+    order: [["createdAt", "DESC"]],
+    include: [
+      {
+        model: Project,
+        as: "project",
+        required: false,
+        attributes: ["pid", "projectName", "projectType", "startDate", "endDate", "projectAmount"],
+      },
+    ],
+  });
 
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Clients"),
+    count: clients.length,
+    clients,
+  });
+});
 
-    const clients = await Client.findAll({
-      where: { userId },
-      order: [["createdAt", "DESC"]],
-      include: [
-        {
-          model: Project,
-          as: "project",
-          required: false,
-          attributes: ["pid", "projectName", "projectType", "startDate", "endDate", "projectAmount"],
-        },
-      ],
-    });
+/**
+ * @desc    Get all clients for a user (POST - used by mobile)
+ * @route   POST /client/all_clients
+ * @access  Private
+ */
+exports.getClientsByUserPost = asyncHandler(async (req, res) => {
+  const userId = req.user?.uid || req.body.userId;
 
-    return res.status(200).json({
-      success: true,
-      count: clients.length,
-      clients,
-    });
-  } catch (err) {
-    console.error("❌ Error fetching user clients:", err);
-    return res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
-    });
+  if (!userId) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
   }
-};
 
+  const clients = await Client.findAll({
+    where: { userId },
+    order: [["createdAt", "DESC"]],
+    include: [
+      {
+        model: Project,
+        as: "project",
+        required: false,
+        attributes: ["pid", "projectName", "projectType", "startDate", "endDate", "projectAmount"],
+      },
+    ],
+  });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.FETCHED("Clients"),
+    count: clients.length,
+    clients,
+  });
+});

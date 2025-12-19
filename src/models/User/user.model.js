@@ -64,6 +64,16 @@ module.exports = (sequelize, Sequelize) => {
         defaultValue: "creator", // e.g., creator, admin
       },
 
+      // Password reset
+      resetPasswordToken: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      resetPasswordExpires: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+
       // Flags / status
       isEmailVerified: {
         type: DataTypes.BOOLEAN,
