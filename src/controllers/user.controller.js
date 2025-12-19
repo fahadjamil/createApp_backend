@@ -148,10 +148,18 @@ exports.signin = asyncHandler(async (req, res) => {
 
   logger.info("User signin attempt", { email });
 
-  // Find user (only select necessary columns to avoid missing column errors)
+  // Find user (case-insensitive email lookup)
   const user = await User.findOne({ 
-    where: { email },
+    where: db.Sequelize.where(
+      db.Sequelize.fn('LOWER', db.Sequelize.col('email')),
+      email.trim().toLowerCase()
+    ),
     attributes: ['uid', 'email', 'password', 'role', 'full_name', 'firstName', 'lastName', 'phone']
+  });
+  
+  logger.info("Signin attempt", { 
+    email: email.trim().toLowerCase(), 
+    userFound: !!user 
   });
 
   if (!user) {
@@ -160,6 +168,13 @@ exports.signin = asyncHandler(async (req, res) => {
 
   // Compare password
   const isMatch = await bcrypt.compare(password, user.password);
+  
+  logger.info("Password comparison", { 
+    email: user.email,
+    passwordLength: password?.length,
+    storedHashLength: user.password?.length,
+    isMatch: isMatch
+  });
 
   if (!isMatch) {
     throw new BadRequestError(MESSAGES.ERROR.INVALID_CREDENTIALS);
@@ -405,8 +420,19 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
 
   logger.info("Password reset requested", { email });
 
-  // Find user by email
-  const user = await User.findOne({ where: { email } });
+  // Find user by email (case-insensitive lookup)
+  const user = await User.findOne({ 
+    where: db.Sequelize.where(
+      db.Sequelize.fn('LOWER', db.Sequelize.col('email')),
+      email.trim().toLowerCase()
+    )
+  });
+  
+  logger.info("User lookup for password reset", { 
+    email: email.trim().toLowerCase(), 
+    userFound: !!user,
+    userId: user?.uid 
+  });
 
   // For security, always return success even if user not found
   if (!user) {
@@ -430,12 +456,30 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
   const newPassword = generatePassword();
   const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-  // Update user's password in database
-  await user.update({
-    password: hashedPassword,
-    resetPasswordToken: null,
-    resetPasswordExpires: null,
+  logger.info("Generated new password for user", { 
+    userId: user.uid, 
+    email: user.email,
+    newPassword: newPassword, // Remove this log in production!
+    hashedLength: hashedPassword.length 
   });
+
+  // Update user's password in database
+  try {
+    await user.update({
+      password: hashedPassword,
+    });
+    
+    // Verify the update was successful
+    const updatedUser = await User.findOne({ where: { email: user.email } });
+    const verifyMatch = await bcrypt.compare(newPassword, updatedUser.password);
+    logger.info("Password update verification", { 
+      userId: user.uid, 
+      passwordUpdated: verifyMatch 
+    });
+  } catch (updateError) {
+    logger.error("Failed to update password in database", { error: updateError.message });
+    throw new BadRequestError("Failed to update password. Please try again.");
+  }
 
   // Send new password via email
   try {
@@ -451,10 +495,17 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
 
     logger.info("New password sent via email", { userId: user.uid, email: user.email });
     
-    res.status(HTTP_STATUS.OK).json({
+    const response = {
       success: true,
       message: "A new password has been sent to your email!",
-    });
+    };
+    
+    // Include password in development for testing (REMOVE IN PRODUCTION!)
+    if (process.env.ENV !== "production") {
+      response.newPassword = newPassword;
+    }
+    
+    res.status(HTTP_STATUS.OK).json(response);
   } catch (error) {
     logger.error("Failed to send password reset email", { error: error.message });
     throw new BadRequestError("Failed to send password reset email. Please try again.");
