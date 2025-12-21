@@ -159,13 +159,6 @@ app.get("/reset-password", (req, res) => {
               <button type="button" class="toggle-password" onclick="togglePassword('password')"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
             </div>
           </div>
-          <div class="requirements">
-            <h4>Password Requirements</h4>
-            <div class="requirement" id="req-length"><span class="icon">✓</span><span>At least 8 characters</span></div>
-            <div class="requirement" id="req-upper"><span class="icon">✓</span><span>One uppercase letter</span></div>
-            <div class="requirement" id="req-lower"><span class="icon">✓</span><span>One lowercase letter</span></div>
-            <div class="requirement" id="req-number"><span class="icon">✓</span><span>One number</span></div>
-          </div>
           <div class="form-group">
             <label for="confirmPassword">Confirm Password</label>
             <div class="input-wrapper">
@@ -173,9 +166,15 @@ app.get("/reset-password", (req, res) => {
               <button type="button" class="toggle-password" onclick="togglePassword('confirmPassword')"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
             </div>
           </div>
+          <div class="requirements">
+            <h4>Password Requirements</h4>
+            <div class="requirement" id="req-length"><span class="icon">✓</span><span>At least 8 characters</span></div>
+            <div class="requirement" id="req-upper"><span class="icon">✓</span><span>One uppercase letter</span></div>
+            <div class="requirement" id="req-lower"><span class="icon">✓</span><span>One lowercase letter</span></div>
+            <div class="requirement" id="req-number"><span class="icon">✓</span><span>One number</span></div>
+          </div>
           <button type="submit" id="submitBtn" class="btn" disabled>Reset Password</button>
         </form>
-        <div style="text-align:center;margin-top:20px"><a href="https://create-app-eight.vercel.app/login" class="back-link">← Back to Login</a></div>
       </div>
     </div>
     <div id="successContainer" class="success-container">
