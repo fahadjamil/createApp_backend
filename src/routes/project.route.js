@@ -77,6 +77,13 @@ module.exports = (app) => {
     projectController.getSingleDraftProject
   );
 
+  // Update draft project
+  router.put(
+    "/update_draft/:id",
+    optionalAuth,
+    projectController.updateDraftProject
+  );
+
   // Delete draft project
   router.delete(
     "/delete_draft/:id",

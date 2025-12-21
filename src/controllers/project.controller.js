@@ -105,6 +105,14 @@ exports.Newproject = asyncHandler(async (req, res) => {
     throw new BadRequestError(MESSAGES.ERROR.REQUIRED("userId"));
   }
 
+  // Validate projectAmount is greater than zero when completing a draft project
+  if (req.body.dpid) {
+    const projectAmount = parseFloat(req.body.projectAmount);
+    if (!projectAmount || projectAmount <= 0) {
+      throw new BadRequestError("Project amount must be greater than zero to complete the project");
+    }
+  }
+
   let project;
 
   if (req.body.pid) {
@@ -434,6 +442,50 @@ exports.deleteProject = asyncHandler(async (req, res) => {
   res.status(HTTP_STATUS.OK).json({
     success: true,
     message: MESSAGES.SUCCESS.DELETED("Project"),
+  });
+});
+
+/**
+ * @desc    Update draft project by ID
+ * @route   PUT /project/update_draft/:id
+ * @access  Private
+ */
+exports.updateDraftProject = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { startDate, endDate, dueDate, paymentStartDate, ...rest } = req.body;
+
+  if (!id) {
+    throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Draft project ID"));
+  }
+
+  const draftProject = await DraftProject.findOne({ where: { dpid: id } });
+
+  if (!draftProject) {
+    throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Draft project"));
+  }
+
+  // Helper to validate/convert date
+  const parseDateOrNull = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const updates = {
+    ...rest,
+    startDate: parseDateOrNull(startDate),
+    endDate: parseDateOrNull(endDate),
+    dueDate: parseDateOrNull(dueDate),
+    paymentStartDate: parseDateOrNull(paymentStartDate),
+  };
+
+  await draftProject.update(updates);
+  logger.info("Draft project updated", { draftId: id });
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: MESSAGES.SUCCESS.UPDATED("Draft project"),
+    draft: draftProject,
   });
 });
 
