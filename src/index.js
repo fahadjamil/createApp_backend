@@ -79,8 +79,13 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Password Reset Page (served from backend)
+// Password Reset Page (served from backend) - needs relaxed CSP for inline scripts
 app.get("/reset-password", (req, res) => {
+  // Override helmet's CSP to allow inline scripts for this page
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'"
+  );
   const resetPasswordHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -156,14 +161,14 @@ app.get("/reset-password", (req, res) => {
             <label for="password">New Password</label>
             <div class="input-wrapper">
               <input type="password" id="password" placeholder="Enter new password" required>
-              <button type="button" class="toggle-password" onclick="togglePassword('password')"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
+              <button type="button" class="toggle-password" id="togglePassword1"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
             </div>
           </div>
           <div class="form-group">
             <label for="confirmPassword">Confirm Password</label>
             <div class="input-wrapper">
               <input type="password" id="confirmPassword" placeholder="Confirm new password" required>
-              <button type="button" class="toggle-password" onclick="togglePassword('confirmPassword')"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
+              <button type="button" class="toggle-password" id="togglePassword2"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
             </div>
           </div>
           <div class="requirements">
@@ -215,7 +220,9 @@ app.get("/reset-password", (req, res) => {
     passwordInput.addEventListener('input',validatePassword);
     confirmInput.addEventListener('input',validatePassword);
     validatePassword();
-    function togglePassword(id){const i=document.getElementById(id);i.type=i.type==='password'?'text':'password'}
+    function togglePassword(inputId){const i=document.getElementById(inputId);i.type=i.type==='password'?'text':'password'}
+    document.getElementById('togglePassword1').addEventListener('click',function(){togglePassword('password')});
+    document.getElementById('togglePassword2').addEventListener('click',function(){togglePassword('confirmPassword')});
     passwordForm.addEventListener('submit',async(e)=>{
       e.preventDefault();
       const{allValid,match}=validatePassword();
@@ -225,9 +232,10 @@ app.get("/reset-password", (req, res) => {
       try{
         const res=await fetch('/user/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,newPassword:passwordInput.value})});
         const data=await res.json();
-        if(data.success){resetForm.style.display='none';successContainer.style.display='block';successContainer.classList.add('show')}
+        console.log('Reset password response:', res.status, data);
+        if(res.ok && data.success){resetForm.style.display='none';successContainer.style.display='block';successContainer.classList.add('show')}
         else{showError(data.message||'Failed to reset password. Link may have expired.')}
-      }catch(err){showError('An error occurred. Please try again.')}
+      }catch(err){console.error('Reset password error:', err);showError('An error occurred. Please try again.')}
       finally{submitBtn.classList.remove('loading');validatePassword()}
     });
     function showError(msg){errorMessage.textContent=msg;errorMessage.classList.add('show')}
