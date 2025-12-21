@@ -214,6 +214,7 @@ app.get("/reset-password", (req, res) => {
     }
     passwordInput.addEventListener('input',validatePassword);
     confirmInput.addEventListener('input',validatePassword);
+    validatePassword();
     function togglePassword(id){const i=document.getElementById(id);i.type=i.type==='password'?'text':'password'}
     passwordForm.addEventListener('submit',async(e)=>{
       e.preventDefault();
@@ -227,7 +228,7 @@ app.get("/reset-password", (req, res) => {
         if(data.success){resetForm.style.display='none';successContainer.style.display='block';successContainer.classList.add('show')}
         else{showError(data.message||'Failed to reset password. Link may have expired.')}
       }catch(err){showError('An error occurred. Please try again.')}
-      finally{submitBtn.classList.remove('loading');submitBtn.disabled=false;validatePassword()}
+      finally{submitBtn.classList.remove('loading');validatePassword()}
     });
     function showError(msg){errorMessage.textContent=msg;errorMessage.classList.add('show')}
     function hideError(){errorMessage.classList.remove('show')}
