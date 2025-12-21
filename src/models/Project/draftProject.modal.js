@@ -9,7 +9,8 @@ module.exports = (sequelize, Sequelize) => {
     },
     projectName: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true, // Allow null for drafts - users can save with minimal data
+      defaultValue: "Untitled Draft",
     },
     projectType: DataTypes.STRING,
     clientName: DataTypes.STRING,
