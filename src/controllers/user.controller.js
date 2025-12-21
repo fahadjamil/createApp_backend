@@ -502,7 +502,7 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
   });
 
   // Build reset URL - points to backend's reset page
-  const backendUrl = process.env.BACKEND_URL || "https://create-backend-two.vercel.app";
+  const backendUrl = process.env.BACKEND_URL || "https://create-app-backend.vercel.app";
   const resetUrl = `${backendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
   // Send email with reset link
