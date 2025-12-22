@@ -798,6 +798,512 @@ app.get("/admin/analytics", (req, res) => {
   res.send(analyticsHTML);
 });
 
+// Funnel Analytics Page (Mobile App Funnels)
+app.get("/admin/funnel-analytics", (req, res) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:* https://*.vercel.app"
+  );
+  const funnelHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Funnel Analytics - Create App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-50: #eff6ff; --primary-100: #dbeafe; --primary-200: #bfdbfe;
+      --primary-500: #3b82f6; --primary-600: #2563eb; --primary-700: #1d4ed8;
+      --primary-800: #1e40af; --primary-900: #0f172a;
+      --success-50: #f0fdf4; --success-100: #dcfce7; --success-500: #22c55e; --success-600: #16a34a; --success-700: #15803d;
+      --warning-50: #fffbeb; --warning-100: #fef3c7; --warning-500: #f59e0b; --warning-600: #d97706; --warning-700: #b45309;
+      --error-50: #fef2f2; --error-100: #fee2e2; --error-500: #ef4444; --error-600: #dc2626; --error-700: #b91c1c;
+      --purple-50: #faf5ff; --purple-100: #f3e8ff; --purple-500: #a855f7; --purple-600: #9333ea; --purple-700: #7e22ce;
+      --neutral-50: #f8fafc; --neutral-100: #f1f5f9; --neutral-200: #e2e8f0;
+      --neutral-300: #cbd5e1; --neutral-400: #94a3b8; --neutral-600: #475569;
+      --text-primary: #0f172a; --text-secondary: #475569; --text-tertiary: #64748b; --text-muted: #94a3b8;
+      --bg-primary: #f8fafc; --bg-secondary: #ffffff;
+      --border-light: #e2e8f0;
+      --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg-primary); min-height: 100vh; color: var(--text-primary); }
+    
+    /* Login */
+    .login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--primary-900) 0%, #1e3a5f 100%); padding: 20px; }
+    .login-card { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 40px; width: 100%; max-width: 400px; box-shadow: var(--shadow-md); }
+    .login-logo { font-size: 28px; font-weight: 800; color: var(--primary-600); text-align: center; margin-bottom: 8px; }
+    .login-subtitle { color: var(--text-tertiary); text-align: center; margin-bottom: 32px; font-size: 14px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+    .form-group input { width: 100%; padding: 12px 16px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 14px; font-family: inherit; }
+    .form-group input:focus { outline: none; border-color: var(--primary-500); box-shadow: 0 0 0 3px var(--primary-100); }
+    .login-btn { width: 100%; padding: 14px; background: var(--primary-600); color: white; border: none; border-radius: var(--radius-md); font-size: 15px; font-weight: 600; cursor: pointer; }
+    .login-btn:hover { background: var(--primary-700); }
+    .login-error { background: var(--error-100); color: var(--error-500); padding: 12px; border-radius: var(--radius-md); margin-bottom: 20px; font-size: 14px; display: none; }
+    .login-error.show { display: block; }
+    
+    /* Dashboard */
+    .dashboard { display: none; }
+    .dashboard.show { display: block; }
+    .header { background: var(--bg-secondary); border-bottom: 1px solid var(--border-light); padding: 16px 24px; position: sticky; top: 0; z-index: 100; }
+    .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-logo { font-size: 22px; font-weight: 800; color: var(--primary-600); }
+    .header-title { font-size: 18px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .filter-select { padding: 8px 16px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 13px; font-family: inherit; background: var(--bg-secondary); cursor: pointer; min-width: 130px; }
+    .filter-select:focus { outline: none; border-color: var(--primary-500); }
+    .btn { padding: 8px 16px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; border: 1px solid; transition: all 0.2s; }
+    .btn-refresh { background: var(--primary-50); color: var(--primary-600); border-color: var(--primary-200); }
+    .btn-refresh:hover { background: var(--primary-100); }
+    .btn-back { background: var(--neutral-100); color: var(--text-secondary); border-color: var(--border-light); text-decoration: none; }
+    .btn-back:hover { background: var(--neutral-200); }
+    .btn-logout { background: var(--neutral-100); color: var(--text-secondary); border-color: var(--border-light); }
+    .btn-logout:hover { background: var(--error-100); color: var(--error-500); border-color: var(--error-500); }
+    
+    .main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--bg-secondary); border-radius: var(--radius-lg); padding: 20px; border: 1px solid var(--border-light); display: flex; align-items: center; gap: 14px; transition: all 0.2s; }
+    .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .stat-icon { width: 44px; height: 44px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .stat-icon.blue { background: linear-gradient(135deg, var(--primary-100), var(--primary-50)); }
+    .stat-icon.green { background: linear-gradient(135deg, var(--success-100), var(--success-50)); }
+    .stat-icon.orange { background: linear-gradient(135deg, var(--warning-100), var(--warning-50)); }
+    .stat-icon.red { background: linear-gradient(135deg, var(--error-100), var(--error-50)); }
+    .stat-icon.purple { background: linear-gradient(135deg, var(--purple-100), var(--purple-50)); }
+    .stat-content h3 { font-size: 22px; font-weight: 700; color: var(--text-primary); }
+    .stat-content p { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+    
+    /* Cards */
+    .card { background: var(--bg-secondary); border-radius: var(--radius-lg); border: 1px solid var(--border-light); margin-bottom: 24px; overflow: hidden; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; background: var(--neutral-50); }
+    .card-header h3 { font-size: 15px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+    .card-body { padding: 20px; }
+    
+    /* Funnel Summary */
+    .funnel-summary { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border-light); }
+    .funnel-stat { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--neutral-50); border-radius: var(--radius-lg); border: 1px solid var(--border-light); }
+    .funnel-stat.highlight { background: linear-gradient(135deg, var(--primary-50), var(--primary-100)); border-color: var(--primary-200); }
+    .funnel-stat-icon { width: 36px; height: 36px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .funnel-stat-icon.start { background: var(--primary-100); }
+    .funnel-stat-icon.complete { background: var(--success-100); }
+    .funnel-stat-icon.abandon { background: var(--error-100); }
+    .funnel-stat-icon.rate { background: var(--purple-100); }
+    .funnel-stat-icon.time { background: var(--warning-100); }
+    .funnel-stat-value { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+    .funnel-stat-label { font-size: 11px; color: var(--text-tertiary); }
+    .funnel-arrow { color: var(--text-muted); font-size: 18px; }
+    
+    /* Funnel Steps */
+    .funnel-steps { margin-bottom: 20px; }
+    .funnel-step-header { display: grid; grid-template-columns: 1fr 90px 90px 110px; gap: 12px; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; border-bottom: 2px solid var(--border-light); margin-bottom: 12px; }
+    .funnel-step { display: grid; grid-template-columns: 1fr 90px 90px 110px; gap: 12px; align-items: center; padding: 8px 0; }
+    .funnel-bar-container { height: 32px; background: var(--neutral-100); border-radius: var(--radius-md); overflow: hidden; }
+    .funnel-bar { height: 100%; background: linear-gradient(90deg, var(--primary-500), var(--primary-400)); border-radius: var(--radius-md); display: flex; align-items: center; padding: 0 12px; min-width: 60px; transition: width 0.5s ease; }
+    .funnel-bar span { font-size: 12px; font-weight: 600; color: white; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    .funnel-count { font-size: 13px; font-weight: 600; color: var(--text-primary); text-align: center; }
+    .funnel-time { font-size: 12px; color: var(--text-secondary); text-align: center; }
+    .funnel-dropoff { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: var(--radius-md); }
+    .funnel-dropoff.low { background: var(--success-50); color: var(--success-700); }
+    .funnel-dropoff.medium { background: var(--warning-50); color: var(--warning-700); }
+    .funnel-dropoff.high { background: var(--error-50); color: var(--error-700); }
+    .abandon-badge { background: var(--error-500); color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; margin-left: 4px; }
+    
+    /* Drop-off Summary */
+    .dropoff-summary { background: linear-gradient(135deg, var(--warning-50), #fffbeb); border: 1px solid #fde68a; border-radius: var(--radius-lg); padding: 16px; margin-bottom: 16px; }
+    .dropoff-summary h4 { font-size: 13px; font-weight: 600; color: var(--warning-700); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .dropoff-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: white; border-radius: var(--radius-md); border: 1px solid #fde68a; margin-bottom: 8px; }
+    .dropoff-item:last-child { margin-bottom: 0; }
+    .dropoff-rank { font-size: 11px; font-weight: 700; color: var(--warning-600); background: var(--warning-100); padding: 2px 8px; border-radius: 4px; }
+    .dropoff-step { flex: 1; font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .dropoff-count { font-size: 11px; color: var(--text-tertiary); }
+    
+    /* Extra Stats */
+    .extra-stats { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px dashed var(--border-light); }
+    .extra-stat { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--neutral-50); border-radius: var(--radius-md); font-size: 13px; color: var(--text-secondary); }
+    .extra-stat.highlight { background: linear-gradient(135deg, var(--success-50), #ecfdf5); border: 1px solid #a7f3d0; }
+    .extra-stat strong { color: var(--text-primary); }
+    
+    /* Friction Points */
+    .friction-points { display: flex; flex-direction: column; gap: 12px; }
+    .friction-card { display: flex; align-items: flex-start; gap: 14px; padding: 16px; background: var(--neutral-50); border: 1px solid var(--border-light); border-radius: var(--radius-lg); transition: all 0.2s; }
+    .friction-card:hover { box-shadow: var(--shadow-sm); border-color: var(--error-200); }
+    .friction-rank { width: 28px; height: 28px; background: linear-gradient(135deg, var(--error-500), var(--error-400)); color: white; font-size: 12px; font-weight: 700; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .friction-content { flex: 1; min-width: 0; }
+    .friction-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .friction-badge { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 10px; }
+    .friction-badge.onboarding { background: var(--primary-100); color: var(--primary-700); }
+    .friction-badge.project { background: var(--success-100); color: var(--success-700); }
+    .friction-step { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .friction-error { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+    .friction-error-icon { color: var(--error-500); flex-shrink: 0; }
+    .friction-count { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; }
+    .friction-count-value { font-size: 18px; font-weight: 700; color: var(--error-600); }
+    .friction-count-label { font-size: 10px; color: var(--text-muted); }
+    
+    /* Errors Table */
+    .errors-section { margin-bottom: 20px; }
+    .errors-section:last-child { margin-bottom: 0; }
+    .errors-section h4 { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border-light); display: flex; align-items: center; gap: 6px; }
+    .errors-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .errors-table th, .errors-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-light); }
+    .errors-table th { font-weight: 600; color: var(--text-secondary); background: var(--neutral-50); text-transform: uppercase; font-size: 10px; }
+    .errors-table td { color: var(--text-primary); }
+    .errors-table .error-step { font-weight: 500; white-space: nowrap; }
+    .errors-table .error-msg { color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .errors-table .error-count { font-weight: 600; color: var(--error-600); text-align: center; }
+    
+    /* Empty State */
+    .empty-state { text-align: center; padding: 40px; color: var(--text-tertiary); }
+    .empty-state p { margin-top: 8px; }
+    
+    /* Loading */
+    .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; color: var(--text-tertiary); }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--border-light); border-top-color: var(--primary-500); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Grid Layout */
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    @media (max-width: 1024px) { .grid-2 { grid-template-columns: 1fr; } }
+    
+    @media (max-width: 768px) {
+      .header-content { flex-direction: column; align-items: stretch; }
+      .header-right { justify-content: center; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .funnel-step-header, .funnel-step { grid-template-columns: 1fr; gap: 8px; }
+      .funnel-step-header span:not(:first-child) { display: none; }
+      .funnel-count::before { content: 'Count: '; font-weight: normal; color: var(--text-muted); }
+      .funnel-time::before { content: 'Time: '; font-weight: normal; color: var(--text-muted); }
+    }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .funnel-summary { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Login -->
+  <div id="loginPage" class="login-container">
+    <div class="login-card">
+      <div class="login-logo">Create</div>
+      <p class="login-subtitle">Mobile App Funnel Analytics</p>
+      <div id="loginError" class="login-error"></div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="Enter admin email" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter password" required>
+        </div>
+        <button type="submit" class="login-btn">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="dashboard">
+    <header class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <span class="header-logo">Create</span>
+          <span class="header-title">📊 Funnel Analytics</span>
+        </div>
+        <div class="header-right">
+          <select id="dateRange" class="filter-select">
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="all">All time</option>
+          </select>
+          <select id="platform" class="filter-select">
+            <option value="">All Platforms</option>
+            <option value="ios">iOS</option>
+            <option value="android">Android</option>
+          </select>
+          <button id="refreshBtn" class="btn btn-refresh">🔄 Refresh</button>
+          <a href="/admin/analytics" class="btn btn-back">📈 Events</a>
+          <button id="logoutBtn" class="btn btn-logout">Logout</button>
+        </div>
+      </div>
+    </header>
+    
+    <main class="main">
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card"><div class="stat-icon blue">🚀</div><div class="stat-content"><h3 id="onboardingStarted">-</h3><p>Onboarding Started</p></div></div>
+        <div class="stat-card"><div class="stat-icon green">✅</div><div class="stat-content"><h3 id="onboardingRate">-</h3><p>Onboarding Rate</p></div></div>
+        <div class="stat-card"><div class="stat-icon orange">🔧</div><div class="stat-content"><h3 id="projectsStarted">-</h3><p>Projects Started</p></div></div>
+        <div class="stat-card"><div class="stat-icon purple">📊</div><div class="stat-content"><h3 id="projectRate">-</h3><p>Project Completion</p></div></div>
+        <div class="stat-card"><div class="stat-icon blue">🏆</div><div class="stat-content"><h3 id="firstProjects">-</h3><p>First Projects</p></div></div>
+        <div class="stat-card"><div class="stat-icon red">⚠️</div><div class="stat-content"><h3 id="frictionCount">-</h3><p>Friction Points</p></div></div>
+      </div>
+      
+      <!-- Onboarding Funnel -->
+      <div class="card">
+        <div class="card-header">
+          <h3>🚀 Onboarding Funnel</h3>
+        </div>
+        <div class="card-body" id="onboardingFunnel">
+          <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+        </div>
+      </div>
+      
+      <!-- Project Funnel -->
+      <div class="card">
+        <div class="card-header">
+          <h3>🔧 Project Creation Funnel</h3>
+        </div>
+        <div class="card-body" id="projectFunnel">
+          <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+        </div>
+      </div>
+      
+      <!-- Grid -->
+      <div class="grid-2">
+        <!-- Friction Points -->
+        <div class="card">
+          <div class="card-header">
+            <h3>🔥 Top 5 Friction Points</h3>
+          </div>
+          <div class="card-body" id="frictionPoints">
+            <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+        </div>
+        
+        <!-- Errors -->
+        <div class="card">
+          <div class="card-header">
+            <h3>❌ Step-Level Errors</h3>
+          </div>
+          <div class="card-body" id="stepErrors">
+            <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API = window.location.origin;
+    let token = localStorage.getItem('analytics_token');
+    
+    const loginPage = document.getElementById('loginPage');
+    const dashboard = document.getElementById('dashboard');
+    const loginForm = document.getElementById('loginForm');
+    const loginError = document.getElementById('loginError');
+    
+    if (token) { showDashboard(); fetchData(); }
+    
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginError.classList.remove('show');
+      try {
+        const res = await fetch(API + '/admin/analytics/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value })
+        });
+        const data = await res.json();
+        if (data.success && data.token) {
+          token = data.token;
+          localStorage.setItem('analytics_token', data.token);
+          showDashboard();
+          fetchData();
+        } else {
+          loginError.textContent = data.message || 'Invalid credentials';
+          loginError.classList.add('show');
+        }
+      } catch (err) {
+        loginError.textContent = 'Connection error';
+        loginError.classList.add('show');
+      }
+    });
+    
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('analytics_token');
+      token = null;
+      loginPage.style.display = 'flex';
+      dashboard.classList.remove('show');
+    });
+    
+    document.getElementById('refreshBtn').addEventListener('click', fetchData);
+    document.getElementById('dateRange').addEventListener('change', fetchData);
+    document.getElementById('platform').addEventListener('change', fetchData);
+    
+    function showDashboard() {
+      loginPage.style.display = 'none';
+      dashboard.classList.add('show');
+    }
+    
+    async function fetchData() {
+      const days = document.getElementById('dateRange').value;
+      const platform = document.getElementById('platform').value;
+      const end = new Date().toISOString();
+      const start = days === 'all' ? '' : new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      
+      let url = API + '/api/analytics/admin-dashboard?endDate=' + end;
+      if (start) url += '&startDate=' + start;
+      if (platform) url += '&platform=' + platform;
+      
+      try {
+        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+        if (res.status === 401) { document.getElementById('logoutBtn').click(); return; }
+        const data = await res.json();
+        if (data.success) {
+          const f = data.data.funnelAnalytics || {};
+          renderStats(f);
+          renderFunnel('onboardingFunnel', f.onboarding, 'onboarding');
+          renderFunnel('projectFunnel', f.projectCreation, 'project');
+          renderFriction(f.topFrictionPoints);
+          renderErrors(f.onboarding?.stepErrors, f.projectCreation?.stepErrors);
+        }
+      } catch (err) { console.error(err); }
+    }
+    
+    function renderStats(f) {
+      document.getElementById('onboardingStarted').textContent = f.onboarding?.started || 0;
+      document.getElementById('onboardingRate').textContent = (f.onboarding?.completionRate || 0) + '%';
+      document.getElementById('projectsStarted').textContent = f.projectCreation?.started || 0;
+      document.getElementById('projectRate').textContent = (f.projectCreation?.completionRate || 0) + '%';
+      document.getElementById('firstProjects').textContent = f.projectCreation?.firstProjectsCreated || 0;
+      document.getElementById('frictionCount').textContent = f.topFrictionPoints?.length || 0;
+    }
+    
+    function formatTime(ms) {
+      if (!ms || ms === 0) return '—';
+      if (ms < 1000) return ms + 'ms';
+      if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+      if (ms < 3600000) return (ms / 60000).toFixed(1) + 'm';
+      return (ms / 3600000).toFixed(1) + 'h';
+    }
+    
+    function renderFunnel(containerId, data, type) {
+      const container = document.getElementById(containerId);
+      if (!data || data.started === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No ' + (type === 'onboarding' ? 'onboarding' : 'project creation') + ' data yet</p></div>';
+        return;
+      }
+      
+      let html = '<div class="funnel-summary">';
+      html += '<div class="funnel-stat"><div class="funnel-stat-icon start">▶️</div><div><div class="funnel-stat-value">' + data.started + '</div><div class="funnel-stat-label">Started</div></div></div>';
+      html += '<span class="funnel-arrow">→</span>';
+      html += '<div class="funnel-stat"><div class="funnel-stat-icon complete">✓</div><div><div class="funnel-stat-value">' + data.completed + '</div><div class="funnel-stat-label">Completed</div></div></div>';
+      html += '<div class="funnel-stat"><div class="funnel-stat-icon abandon">✕</div><div><div class="funnel-stat-value">' + data.abandoned + '</div><div class="funnel-stat-label">Abandoned</div></div></div>';
+      html += '<div class="funnel-stat highlight"><div class="funnel-stat-icon rate">%</div><div><div class="funnel-stat-value">' + data.completionRate + '%</div><div class="funnel-stat-label">Rate</div></div></div>';
+      html += '<div class="funnel-stat"><div class="funnel-stat-icon time">⏱</div><div><div class="funnel-stat-value">' + formatTime(data.avgCompletionTimeMs) + '</div><div class="funnel-stat-label">Avg Time</div></div></div>';
+      html += '</div>';
+      
+      if (data.stepCompletions && data.stepCompletions.length > 0) {
+        html += '<div class="funnel-steps">';
+        html += '<div class="funnel-step-header"><span>Step</span><span>Completions</span><span>Avg Time</span><span>Drop-off</span></div>';
+        
+        data.stepCompletions.forEach((step, i) => {
+          const prev = i === 0 ? data.started : data.stepCompletions[i-1].completionCount;
+          const dropoff = prev > 0 ? ((prev - step.completionCount) / prev * 100).toFixed(1) : 0;
+          const width = data.started > 0 ? Math.max((step.completionCount / data.started * 100), 5) : 5;
+          const dropClass = dropoff > 30 ? 'high' : dropoff > 15 ? 'medium' : 'low';
+          const abandon = (data.stepDropOffs || []).find(d => d.stepName === step.stepName);
+          
+          html += '<div class="funnel-step">';
+          html += '<div class="funnel-bar-container"><div class="funnel-bar" style="width:' + width + '%"><span>' + step.stepName + '</span></div></div>';
+          html += '<div class="funnel-count">' + step.completionCount + '</div>';
+          html += '<div class="funnel-time">' + formatTime(step.avgTimeMs) + '</div>';
+          html += '<div class="funnel-dropoff ' + dropClass + '">';
+          if (dropoff > 0) html += '↓ ' + dropoff + '%';
+          if (abandon && abandon.abandonCount > 0) html += '<span class="abandon-badge">' + abandon.abandonCount + '</span>';
+          html += '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      
+      if (data.stepDropOffs && data.stepDropOffs.length > 0) {
+        html += '<div class="dropoff-summary"><h4>⚠️ Top Drop-off Points</h4>';
+        data.stepDropOffs.slice(0, 5).forEach((d, i) => {
+          html += '<div class="dropoff-item"><span class="dropoff-rank">#' + (i+1) + '</span><span class="dropoff-step">' + d.stepName + '</span><span class="dropoff-count">' + d.abandonCount + ' users</span></div>';
+        });
+        html += '</div>';
+      }
+      
+      if (type === 'project') {
+        html += '<div class="extra-stats">';
+        if (data.savedAsDraft > 0) html += '<div class="extra-stat">📝 <strong>' + data.savedAsDraft + '</strong> saved as draft</div>';
+        if (data.firstProjectsCreated > 0) html += '<div class="extra-stat highlight">🏆 <strong>' + data.firstProjectsCreated + '</strong> first projects</div>';
+        if (data.projectsMarkedComplete > 0) html += '<div class="extra-stat">✅ <strong>' + data.projectsMarkedComplete + '</strong> marked complete</div>';
+        html += '</div>';
+      }
+      
+      container.innerHTML = html;
+    }
+    
+    function renderFriction(data) {
+      const container = document.getElementById('frictionPoints');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state">✅<p>No friction points - smooth sailing!</p></div>';
+        return;
+      }
+      
+      let html = '<div class="friction-points">';
+      data.forEach((p, i) => {
+        html += '<div class="friction-card">';
+        html += '<div class="friction-rank">' + (i+1) + '</div>';
+        html += '<div class="friction-content">';
+        html += '<div class="friction-header"><span class="friction-badge ' + p.funnel + '">' + (p.funnel === 'onboarding' ? 'Onboarding' : 'Project') + '</span><span class="friction-step">' + p.stepName + '</span></div>';
+        html += '<div class="friction-error"><span class="friction-error-icon">⚠️</span><span>' + (p.errorMessage || 'Unknown error') + '</span></div>';
+        html += '</div>';
+        html += '<div class="friction-count"><span class="friction-count-value">' + p.count + '</span><span class="friction-count-label">occurrences</span></div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    }
+    
+    function renderErrors(onboardingErrors, projectErrors) {
+      const container = document.getElementById('stepErrors');
+      let html = '';
+      
+      html += '<div class="errors-section"><h4>🚀 Onboarding Errors</h4>';
+      if (!onboardingErrors || onboardingErrors.length === 0) {
+        html += '<div class="empty-state" style="padding:20px"><p>No errors</p></div>';
+      } else {
+        html += '<table class="errors-table"><thead><tr><th>Step</th><th>Error</th><th>Count</th></tr></thead><tbody>';
+        onboardingErrors.forEach(e => {
+          html += '<tr><td class="error-step">' + e.stepName + '</td><td class="error-msg" title="' + (e.errorMessage || '') + '">' + (e.errorMessage || 'Unknown') + '</td><td class="error-count">' + e.count + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+      
+      html += '<div class="errors-section"><h4>🔧 Project Errors</h4>';
+      if (!projectErrors || projectErrors.length === 0) {
+        html += '<div class="empty-state" style="padding:20px"><p>No errors</p></div>';
+      } else {
+        html += '<table class="errors-table"><thead><tr><th>Step</th><th>Error</th><th>Count</th></tr></thead><tbody>';
+        projectErrors.forEach(e => {
+          html += '<tr><td class="error-step">' + e.stepName + '</td><td class="error-msg" title="' + (e.errorMessage || '') + '">' + (e.errorMessage || 'Unknown') + '</td><td class="error-count">' + e.count + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+      
+      container.innerHTML = html;
+    }
+  </script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html');
+  res.send(funnelHTML);
+});
+
 // Database Sync Endpoint (one-time use to add missing columns)
 app.get("/sync-db", async (req, res) => {
   try {
