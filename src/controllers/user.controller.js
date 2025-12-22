@@ -38,6 +38,10 @@ const initFirebaseAdmin = () => {
  * @access  Public
  */
 exports.signup = asyncHandler(async (req, res) => {
+  console.log("========== SIGNUP REQUEST ==========");
+  console.log("📦 Full Request Body:", JSON.stringify(req.body, null, 2));
+  console.log("=====================================");
+  
   logger.info("User signup attempt", { email: req.body.email });
 
   const { phone, firstName, lastName, email, password, role, searchTerm } = req.body;
@@ -107,7 +111,7 @@ exports.signup = asyncHandler(async (req, res) => {
     await trans.commit();
     logger.info("User signup successful", { userId: user.uid, firebaseUid });
 
-    res.status(HTTP_STATUS.CREATED).json({
+    const response = {
       success: true,
       message: MESSAGES.SUCCESS.SIGNUP,
       token,
@@ -121,7 +125,13 @@ exports.signup = asyncHandler(async (req, res) => {
         role: user.role,
         searchTerm: user.searchTerm,
       },
-    });
+    };
+    
+    console.log("✅ ========== SIGNUP SUCCESS ==========");
+    console.log("📤 Response:", JSON.stringify(response, null, 2));
+    console.log("=======================================");
+    
+    res.status(HTTP_STATUS.CREATED).json(response);
   } catch (error) {
     await trans.rollback();
     // If local DB fails but Firebase succeeded, try to clean up Firebase user

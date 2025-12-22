@@ -1,5 +1,5 @@
 const db = require("../models");
-const { asyncHandler } = require("../middlewares/asyncHandler");
+const asyncHandler = require("../middlewares/asyncHandler");
 const { Op, fn, col, literal } = require("sequelize");
 
 const Analytics = db.Analytics;

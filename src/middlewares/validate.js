@@ -31,13 +31,17 @@ const validators = {
   /**
    * Check if value is valid phone (Pakistan format)
    * Accepts: +92 followed by 10 digits (e.g., +923312344567)
+   * Also handles spaces, dashes, and parentheses in the number
    */
   phone: (value, fieldName) => {
     if (!value) return null;
+    // Remove spaces, dashes, parentheses for validation
+    const cleanedPhone = value.replace(/[\s\-\(\)]/g, '');
     // Accept +92 followed by 10 digits (e.g., +923312344567)
     const phoneRegex = /^\+92\d{10}$/;
-    if (!phoneRegex.test(value)) {
-      return `${fieldName} must be a valid phone number (+92 followed by 10 digits)`;
+    if (!phoneRegex.test(cleanedPhone)) {
+      console.log(`Phone validation failed: "${value}" -> cleaned: "${cleanedPhone}"`);
+      return `${fieldName} must be a valid phone number (+92 followed by 10 digits). Received: "${value}"`;
     }
     return null;
   },
@@ -107,6 +111,13 @@ const schemas = {
  */
 const validate = (schemaName) => {
   return (req, res, next) => {
+    // Log incoming request payload
+    console.log("========== VALIDATION START ==========");
+    console.log(`📋 Schema: ${schemaName}`);
+    console.log(`📦 Request Body:`, JSON.stringify(req.body, null, 2));
+    console.log(`🔗 URL: ${req.method} ${req.originalUrl}`);
+    console.log("=======================================");
+    
     const schema = schemas[schemaName];
     
     if (!schema) {
@@ -130,14 +141,18 @@ const validate = (schemaName) => {
 
     if (errors.length > 0) {
       // Log validation errors for debugging
-      console.log("Validation errors for", schemaName + ":", JSON.stringify(errors, null, 2));
-      console.log("Request body:", JSON.stringify(req.body, null, 2));
+      console.log("❌ ========== VALIDATION FAILED ==========");
+      console.log(`📋 Schema: ${schemaName}`);
+      console.log("🚫 Validation errors:", JSON.stringify(errors, null, 2));
+      console.log("📦 Request body:", JSON.stringify(req.body, null, 2));
+      console.log("==========================================");
       
       // Create a more descriptive error message
       const errorDetails = errors.map(e => `${e.field}: ${e.message}`).join(", ");
       return next(new ValidationError(`Validation failed: ${errorDetails}`, errors));
     }
 
+    console.log("✅ Validation passed for", schemaName);
     next();
   };
 };

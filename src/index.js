@@ -246,6 +246,532 @@ app.get("/reset-password", (req, res) => {
   res.send(resetPasswordHTML);
 });
 
+// Analytics Admin Dashboard Page (served from backend)
+app.get("/admin/analytics", (req, res) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:* https://*.vercel.app"
+  );
+  const analyticsHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics Dashboard - Create App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-50: #eff6ff; --primary-100: #dbeafe; --primary-200: #bfdbfe;
+      --primary-500: #3b82f6; --primary-600: #2563eb; --primary-700: #1d4ed8;
+      --primary-800: #1e40af; --primary-900: #0f172a;
+      --success-100: #dcfce7; --success-500: #22c55e; --success-600: #16a34a;
+      --warning-100: #fef3c7; --warning-500: #f59e0b;
+      --error-100: #fee2e2; --error-500: #ef4444;
+      --neutral-50: #f8fafc; --neutral-100: #f1f5f9; --neutral-200: #e2e8f0;
+      --neutral-300: #cbd5e1; --neutral-400: #94a3b8; --neutral-600: #475569;
+      --text-primary: #0f172a; --text-secondary: #475569; --text-tertiary: #64748b;
+      --bg-primary: #f8fafc; --bg-secondary: #ffffff;
+      --border-light: #e2e8f0;
+      --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg-primary); min-height: 100vh; color: var(--text-primary); }
+    
+    /* Login Page */
+    .login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--primary-900) 0%, #1e3a5f 100%); padding: 20px; }
+    .login-card { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 40px; width: 100%; max-width: 400px; box-shadow: var(--shadow-lg); }
+    .login-logo { font-size: 28px; font-weight: 800; color: var(--primary-600); text-align: center; margin-bottom: 8px; }
+    .login-subtitle { color: var(--text-tertiary); text-align: center; margin-bottom: 32px; font-size: 14px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+    .form-group input { width: 100%; padding: 12px 16px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 14px; font-family: inherit; transition: all 0.2s; }
+    .form-group input:focus { outline: none; border-color: var(--primary-500); box-shadow: 0 0 0 3px var(--primary-100); }
+    .login-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary-600), var(--primary-700)); color: white; border: none; border-radius: var(--radius-md); font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .login-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .login-btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+    .login-error { background: var(--error-100); color: var(--error-500); padding: 12px; border-radius: var(--radius-md); margin-bottom: 20px; font-size: 14px; display: none; }
+    .login-error.show { display: block; }
+    
+    /* Dashboard */
+    .dashboard { display: none; }
+    .dashboard.show { display: block; }
+    .header { background: var(--bg-secondary); border-bottom: 1px solid var(--border-light); padding: 16px 24px; position: sticky; top: 0; z-index: 100; }
+    .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-logo { font-size: 22px; font-weight: 800; color: var(--primary-600); }
+    .header-title { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .refresh-btn, .logout-btn { padding: 8px 16px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+    .refresh-btn { background: var(--primary-50); color: var(--primary-600); border: 1px solid var(--primary-200); }
+    .refresh-btn:hover { background: var(--primary-100); }
+    .logout-btn { background: var(--neutral-100); color: var(--text-secondary); border: 1px solid var(--border-light); }
+    .logout-btn:hover { background: var(--error-100); color: var(--error-500); border-color: var(--error-500); }
+    
+    .main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    
+    /* Filters */
+    .filters { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .filter-select { padding: 10px 16px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 13px; font-family: inherit; background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; min-width: 140px; }
+    .filter-select:focus { outline: none; border-color: var(--primary-500); }
+    
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--bg-secondary); border-radius: var(--radius-lg); padding: 20px; border: 1px solid var(--border-light); display: flex; align-items: center; gap: 16px; transition: all 0.2s; }
+    .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .stat-icon { width: 48px; height: 48px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .stat-icon.blue { background: linear-gradient(135deg, var(--primary-100), var(--primary-50)); color: var(--primary-600); }
+    .stat-icon.green { background: linear-gradient(135deg, var(--success-100), #d1fae5); color: var(--success-600); }
+    .stat-icon.orange { background: linear-gradient(135deg, var(--warning-100), #fef3c7); color: var(--warning-500); }
+    .stat-icon.red { background: linear-gradient(135deg, var(--error-100), #fee2e2); color: var(--error-500); }
+    .stat-content h3 { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .stat-content p { font-size: 13px; color: var(--text-tertiary); margin-top: 2px; }
+    
+    /* Charts Grid */
+    .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 1024px) { .charts-grid { grid-template-columns: 1fr; } }
+    .chart-card { background: var(--bg-secondary); border-radius: var(--radius-lg); border: 1px solid var(--border-light); overflow: hidden; }
+    .chart-card.full { grid-column: 1 / -1; }
+    .chart-header { padding: 16px 20px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; }
+    .chart-header h3 { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .chart-body { padding: 20px; min-height: 280px; }
+    
+    /* Bar Chart */
+    .bar-chart { display: flex; flex-direction: column; gap: 12px; }
+    .bar-row { display: flex; align-items: center; gap: 12px; }
+    .bar-label { width: 100px; font-size: 12px; color: var(--text-secondary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 24px; background: var(--neutral-100); border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding: 0 10px; transition: width 0.5s ease; }
+    .bar-fill span { font-size: 11px; font-weight: 600; color: white; }
+    .bar-count { width: 50px; text-align: right; font-size: 13px; font-weight: 600; color: var(--text-primary); flex-shrink: 0; }
+    .bar-fill.c0 { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .bar-fill.c1 { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .bar-fill.c2 { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .bar-fill.c3 { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .bar-fill.c4 { background: linear-gradient(90deg, #ec4899, #f472b6); }
+    .bar-fill.c5 { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+    
+    /* Timeline */
+    .timeline { height: 180px; display: flex; align-items: flex-end; gap: 3px; padding: 20px 0; }
+    .timeline-bar { flex: 1; background: linear-gradient(180deg, var(--primary-500), var(--primary-300)); border-radius: 4px 4px 0 0; min-height: 4px; transition: all 0.3s; cursor: pointer; }
+    .timeline-bar:hover { background: linear-gradient(180deg, var(--primary-600), var(--primary-400)); }
+    .timeline-labels { display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border-light); }
+    .timeline-labels span { font-size: 11px; color: var(--text-tertiary); }
+    
+    /* Events Table */
+    .events-table { width: 100%; border-collapse: collapse; }
+    .events-table th, .events-table td { padding: 12px 16px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border-light); }
+    .events-table th { font-weight: 600; color: var(--text-secondary); background: var(--neutral-50); }
+    .events-table td { color: var(--text-primary); }
+    .events-table tr:hover td { background: var(--neutral-50); }
+    .event-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: capitalize; }
+    .event-badge.auth { background: var(--primary-100); color: var(--primary-700); }
+    .event-badge.project { background: var(--success-100); color: var(--success-600); }
+    .event-badge.client { background: var(--warning-100); color: #b45309; }
+    .event-badge.navigation { background: #e0e7ff; color: #4338ca; }
+    .event-badge.ui_interaction { background: #ede9fe; color: #7c3aed; }
+    .event-badge.form { background: #fce7f3; color: #db2777; }
+    .event-badge.search { background: #cffafe; color: #0891b2; }
+    .event-badge.error { background: var(--error-100); color: var(--error-500); }
+    .event-badge.other { background: var(--neutral-100); color: var(--neutral-600); }
+    
+    /* Platform Cards */
+    .platform-cards { display: flex; flex-direction: column; gap: 12px; }
+    .platform-card { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--neutral-50); border-radius: var(--radius-md); border: 1px solid var(--border-light); }
+    .platform-icon { width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--primary-100); color: var(--primary-600); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .platform-info { flex: 1; }
+    .platform-info h4 { font-size: 14px; font-weight: 600; text-transform: capitalize; }
+    .platform-info p { font-size: 12px; color: var(--text-tertiary); }
+    .platform-percent { font-size: 18px; font-weight: 700; color: var(--primary-600); }
+    
+    /* Loading */
+    .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; color: var(--text-tertiary); }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--border-light); border-top-color: var(--primary-500); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Empty State */
+    .empty-state { text-align: center; padding: 40px; color: var(--text-tertiary); }
+    .empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5; }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header-content { flex-direction: column; gap: 12px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .filters { flex-direction: column; }
+      .filter-select { width: 100%; }
+      .bar-label { width: 70px; font-size: 11px; }
+    }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Login Page -->
+  <div id="loginPage" class="login-container">
+    <div class="login-card">
+      <div class="login-logo">Create</div>
+      <p class="login-subtitle">Analytics Admin Dashboard</p>
+      <div id="loginError" class="login-error"></div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="Enter your email" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter your password" required>
+        </div>
+        <button type="submit" id="loginBtn" class="login-btn">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="dashboard">
+    <header class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <span class="header-logo">Create</span>
+          <span class="header-title">📊 Analytics Dashboard</span>
+        </div>
+        <div class="header-right">
+          <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
+          <button id="logoutBtn" class="logout-btn">Logout</button>
+        </div>
+      </div>
+    </header>
+    
+    <main class="main">
+      <!-- Filters -->
+      <div class="filters">
+        <select id="dateRange" class="filter-select">
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+        <select id="platform" class="filter-select">
+          <option value="">All Platforms</option>
+          <option value="ios">iOS</option>
+          <option value="android">Android</option>
+          <option value="web">Web</option>
+        </select>
+      </div>
+      
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-icon blue">📈</div>
+          <div class="stat-content">
+            <h3 id="totalEvents">-</h3>
+            <p>Total Events</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">👥</div>
+          <div class="stat-content">
+            <h3 id="uniqueUsers">-</h3>
+            <p>Unique Users</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon orange">🔗</div>
+          <div class="stat-content">
+            <h3 id="sessions">-</h3>
+            <p>Sessions</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon red">⚠️</div>
+          <div class="stat-content">
+            <h3 id="errorEvents">-</h3>
+            <p>Error Events</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Charts -->
+      <div class="charts-grid">
+        <!-- Timeline -->
+        <div class="chart-card full">
+          <div class="chart-header">
+            <h3>📅 Events Over Time</h3>
+            <span style="font-size:12px;color:var(--text-tertiary)" id="dateRangeLabel"></span>
+          </div>
+          <div class="chart-body" id="timelineChart">
+            <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+        </div>
+        
+        <!-- Events by Category -->
+        <div class="chart-card">
+          <div class="chart-header"><h3>📊 Events by Category</h3></div>
+          <div class="chart-body" id="categoryChart">
+            <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+        </div>
+        
+        <!-- Top Screens -->
+        <div class="chart-card">
+          <div class="chart-header"><h3>📱 Top Screens</h3></div>
+          <div class="chart-body" id="screensChart">
+            <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+        </div>
+        
+        <!-- Platforms -->
+        <div class="chart-card">
+          <div class="chart-header"><h3>💻 Platform Distribution</h3></div>
+          <div class="chart-body" id="platformChart">
+            <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+        </div>
+        
+        <!-- Top Events -->
+        <div class="chart-card">
+          <div class="chart-header"><h3>🎯 Top Events</h3></div>
+          <div class="chart-body" id="eventsTable" style="padding:0;overflow-x:auto">
+            <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let authToken = localStorage.getItem('analytics_token');
+    
+    // DOM Elements
+    const loginPage = document.getElementById('loginPage');
+    const dashboard = document.getElementById('dashboard');
+    const loginForm = document.getElementById('loginForm');
+    const loginError = document.getElementById('loginError');
+    const loginBtn = document.getElementById('loginBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const dateRangeSelect = document.getElementById('dateRange');
+    const platformSelect = document.getElementById('platform');
+    
+    // Check auth on load
+    if (authToken) {
+      showDashboard();
+      fetchAnalytics();
+    }
+    
+    // Login
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Signing in...';
+      loginError.classList.remove('show');
+      
+      try {
+        const res = await fetch(API_BASE + '/user/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value
+          })
+        });
+        const data = await res.json();
+        
+        if (data.success && data.token) {
+          authToken = data.token;
+          localStorage.setItem('analytics_token', data.token);
+          showDashboard();
+          fetchAnalytics();
+        } else {
+          loginError.textContent = data.message || 'Login failed';
+          loginError.classList.add('show');
+        }
+      } catch (err) {
+        loginError.textContent = 'Connection error. Please try again.';
+        loginError.classList.add('show');
+      }
+      
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Sign In';
+    });
+    
+    // Logout
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('analytics_token');
+      authToken = null;
+      loginPage.style.display = 'flex';
+      dashboard.classList.remove('show');
+    });
+    
+    // Refresh
+    refreshBtn.addEventListener('click', () => fetchAnalytics());
+    dateRangeSelect.addEventListener('change', () => fetchAnalytics());
+    platformSelect.addEventListener('change', () => fetchAnalytics());
+    
+    function showDashboard() {
+      loginPage.style.display = 'none';
+      dashboard.classList.add('show');
+    }
+    
+    async function fetchAnalytics() {
+      const days = dateRangeSelect.value;
+      const platform = platformSelect.value;
+      const endDate = new Date().toISOString();
+      const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      
+      document.getElementById('dateRangeLabel').textContent = 'Last ' + days + ' days';
+      
+      try {
+        let url = API_BASE + '/api/analytics/summary?startDate=' + startDate + '&endDate=' + endDate;
+        if (platform) url += '&platform=' + platform;
+        
+        const res = await fetch(url, {
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        
+        if (res.status === 401) {
+          localStorage.removeItem('analytics_token');
+          authToken = null;
+          loginPage.style.display = 'flex';
+          dashboard.classList.remove('show');
+          return;
+        }
+        
+        const data = await res.json();
+        if (data.success) {
+          renderStats(data.data.overview);
+          renderTimeline(data.data.eventsOverTime);
+          renderCategoryChart(data.data.eventsByCategory);
+          renderScreensChart(data.data.topScreens);
+          renderPlatformChart(data.data.eventsByPlatform, data.data.overview.totalEvents);
+          renderEventsTable(data.data.topEvents);
+        }
+      } catch (err) {
+        console.error('Error fetching analytics:', err);
+      }
+    }
+    
+    function renderStats(overview) {
+      document.getElementById('totalEvents').textContent = (overview.totalEvents || 0).toLocaleString();
+      document.getElementById('uniqueUsers').textContent = (overview.uniqueUsers || 0).toLocaleString();
+      document.getElementById('sessions').textContent = (overview.uniqueSessions || 0).toLocaleString();
+      document.getElementById('errorEvents').textContent = (overview.errorEvents || 0).toLocaleString();
+    }
+    
+    function renderTimeline(data) {
+      const container = document.getElementById('timelineChart');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No timeline data available</p></div>';
+        return;
+      }
+      
+      const maxCount = Math.max(...data.map(d => parseInt(d.count) || 0));
+      let html = '<div class="timeline">';
+      data.forEach(d => {
+        const height = maxCount > 0 ? ((d.count / maxCount) * 100) : 5;
+        html += '<div class="timeline-bar" style="height:' + Math.max(height, 5) + '%" title="' + d.date + ': ' + d.count + ' events"></div>';
+      });
+      html += '</div><div class="timeline-labels">';
+      html += '<span>' + new Date(data[0].date).toLocaleDateString() + '</span>';
+      html += '<span>' + new Date(data[data.length-1].date).toLocaleDateString() + '</span>';
+      html += '</div>';
+      container.innerHTML = html;
+    }
+    
+    function renderCategoryChart(data) {
+      const container = document.getElementById('categoryChart');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No category data</p></div>';
+        return;
+      }
+      
+      const maxCount = Math.max(...data.map(d => parseInt(d.count) || 0));
+      let html = '<div class="bar-chart">';
+      data.forEach((d, i) => {
+        const pct = maxCount > 0 ? ((d.count / maxCount) * 100) : 0;
+        html += '<div class="bar-row">';
+        html += '<span class="bar-label" title="' + d.eventCategory + '">' + d.eventCategory + '</span>';
+        html += '<div class="bar-track"><div class="bar-fill c' + (i % 6) + '" style="width:' + Math.max(pct, 2) + '%">';
+        if (pct > 15) html += '<span>' + parseInt(d.count).toLocaleString() + '</span>';
+        html += '</div></div>';
+        html += '<span class="bar-count">' + parseInt(d.count).toLocaleString() + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    }
+    
+    function renderScreensChart(data) {
+      const container = document.getElementById('screensChart');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No screen data</p></div>';
+        return;
+      }
+      
+      const top = data.slice(0, 8);
+      const maxCount = Math.max(...top.map(d => parseInt(d.count) || 0));
+      let html = '<div class="bar-chart">';
+      top.forEach((d, i) => {
+        const pct = maxCount > 0 ? ((d.count / maxCount) * 100) : 0;
+        html += '<div class="bar-row">';
+        html += '<span class="bar-label" title="' + d.screenName + '">' + d.screenName + '</span>';
+        html += '<div class="bar-track"><div class="bar-fill c0" style="width:' + Math.max(pct, 2) + '%"></div></div>';
+        html += '<span class="bar-count">' + parseInt(d.count).toLocaleString() + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    }
+    
+    function renderPlatformChart(data, total) {
+      const container = document.getElementById('platformChart');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No platform data</p></div>';
+        return;
+      }
+      
+      const icons = { ios: '🍎', android: '🤖', web: '🌐' };
+      let html = '<div class="platform-cards">';
+      data.forEach(d => {
+        const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
+        html += '<div class="platform-card">';
+        html += '<div class="platform-icon">' + (icons[d.platform] || '📱') + '</div>';
+        html += '<div class="platform-info"><h4>' + d.platform + '</h4><p>' + parseInt(d.count).toLocaleString() + ' events</p></div>';
+        html += '<div class="platform-percent">' + pct + '%</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    }
+    
+    function renderEventsTable(data) {
+      const container = document.getElementById('eventsTable');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding:40px"><p>No events recorded</p></div>';
+        return;
+      }
+      
+      let html = '<table class="events-table"><thead><tr><th>Event Name</th><th>Category</th><th>Count</th></tr></thead><tbody>';
+      data.slice(0, 15).forEach(d => {
+        html += '<tr>';
+        html += '<td>' + d.eventName + '</td>';
+        html += '<td><span class="event-badge ' + (d.eventCategory || 'other') + '">' + (d.eventCategory || 'other') + '</span></td>';
+        html += '<td>' + parseInt(d.count).toLocaleString() + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+  </script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html');
+  res.send(analyticsHTML);
+});
+
 // Database Sync Endpoint (one-time use to add missing columns)
 app.get("/sync-db", async (req, res) => {
   try {
