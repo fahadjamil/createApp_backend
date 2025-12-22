@@ -452,8 +452,28 @@ const getRealtime = asyncHandler(async (req, res) => {
 /**
  * Get admin dashboard analytics with users, projects, and clients
  * GET /api/analytics/admin-dashboard
+ * Query params: startDate, endDate, platform (for filtering funnel analytics)
  */
 const getAdminDashboard = asyncHandler(async (req, res) => {
+  const { startDate, endDate, platform } = req.query;
+  
+  // Date range for funnel analytics (default to last 30 days)
+  const funnelEnd = endDate ? new Date(endDate) : new Date();
+  const funnelStart = startDate
+    ? new Date(startDate)
+    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Build funnel where clause with date filtering
+  const funnelWhereBase = {
+    createdAt: {
+      [Op.between]: [funnelStart, funnelEnd],
+    },
+  };
+
+  if (platform) {
+    funnelWhereBase.platform = platform;
+  }
+
   const User = db.User;
   const Project = db.Project;
   const Client = db.Client;
@@ -558,6 +578,285 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
   });
   const totalRevenue = parseFloat(revenueResult?.totalRevenue) || 0;
 
+  // ==========================================
+  // Performance Metrics - Average durations (with date filtering)
+  // ==========================================
+  
+  // Average time to create a project (from project_created events with duration)
+  const projectCreationStats = await Analytics.findOne({
+    where: {
+      ...funnelWhereBase,
+      eventName: 'project_created',
+      duration: { [Op.ne]: null, [Op.gt]: 0 },
+    },
+    attributes: [
+      [fn("AVG", col("duration")), "avgDuration"],
+      [fn("MIN", col("duration")), "minDuration"],
+      [fn("MAX", col("duration")), "maxDuration"],
+      [fn("COUNT", col("id")), "count"],
+    ],
+    raw: true,
+  });
+
+  // Average time for user signup (from signup_success events with duration)
+  const signupStats = await Analytics.findOne({
+    where: {
+      ...funnelWhereBase,
+      eventName: 'signup_success',
+      duration: { [Op.ne]: null, [Op.gt]: 0 },
+    },
+    attributes: [
+      [fn("AVG", col("duration")), "avgDuration"],
+      [fn("MIN", col("duration")), "minDuration"],
+      [fn("MAX", col("duration")), "maxDuration"],
+      [fn("COUNT", col("id")), "count"],
+    ],
+    raw: true,
+  });
+
+  // Format performance metrics
+  const performanceMetrics = {
+    projectCreation: {
+      avgTimeMs: Math.round(parseFloat(projectCreationStats?.avgDuration) || 0),
+      minTimeMs: Math.round(parseFloat(projectCreationStats?.minDuration) || 0),
+      maxTimeMs: Math.round(parseFloat(projectCreationStats?.maxDuration) || 0),
+      sampleCount: parseInt(projectCreationStats?.count) || 0,
+    },
+    userSignup: {
+      avgTimeMs: Math.round(parseFloat(signupStats?.avgDuration) || 0),
+      minTimeMs: Math.round(parseFloat(signupStats?.minDuration) || 0),
+      maxTimeMs: Math.round(parseFloat(signupStats?.maxDuration) || 0),
+      sampleCount: parseInt(signupStats?.count) || 0,
+    },
+  };
+
+  // ==========================================
+  // Funnel Analytics - Onboarding
+  // ==========================================
+  
+  // Onboarding funnel metrics with date filtering
+  const onboardingStarted = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'onboarding_funnel_start' },
+  });
+
+  const onboardingCompleted = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'onboarding_funnel_complete' },
+  });
+
+  const onboardingAbandoned = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'onboarding_funnel_abandon' },
+  });
+
+  // Onboarding completion time
+  const onboardingTimeStats = await Analytics.findOne({
+    where: {
+      ...funnelWhereBase,
+      eventName: 'onboarding_funnel_complete',
+      duration: { [Op.ne]: null, [Op.gt]: 0 },
+    },
+    attributes: [
+      [fn("AVG", col("duration")), "avgDuration"],
+      [fn("MIN", col("duration")), "minDuration"],
+      [fn("MAX", col("duration")), "maxDuration"],
+    ],
+    raw: true,
+  });
+
+  // Onboarding step-level drop-offs
+  const onboardingStepAbandons = await Analytics.findAll({
+    where: { ...funnelWhereBase, eventName: 'onboarding_step_abandon' },
+    attributes: [
+      [literal("properties->>'step_name'"), "stepName"],
+      [fn("COUNT", col("id")), "count"],
+    ],
+    group: [literal("properties->>'step_name'")],
+    order: [[literal("count"), "DESC"]],
+    raw: true,
+  });
+
+  // Onboarding step completion counts
+  const onboardingStepCompletions = await Analytics.findAll({
+    where: { ...funnelWhereBase, eventName: 'onboarding_step_complete' },
+    attributes: [
+      [literal("properties->>'step_name'"), "stepName"],
+      [fn("COUNT", col("id")), "count"],
+      [fn("AVG", col("duration")), "avgDuration"],
+    ],
+    group: [literal("properties->>'step_name'")],
+    order: [[literal("properties->>'step_number'"), "ASC"]],
+    raw: true,
+  });
+
+  // Onboarding step errors (friction points)
+  const onboardingStepErrors = await Analytics.findAll({
+    where: { ...funnelWhereBase, eventName: 'onboarding_step_error' },
+    attributes: [
+      [literal("properties->>'step_name'"), "stepName"],
+      [literal("properties->>'error_message'"), "errorMessage"],
+      [fn("COUNT", col("id")), "count"],
+    ],
+    group: [literal("properties->>'step_name'"), literal("properties->>'error_message'")],
+    order: [[literal("count"), "DESC"]],
+    limit: 10,
+    raw: true,
+  });
+
+  // ==========================================
+  // Funnel Analytics - Project Creation
+  // ==========================================
+  
+  const projectFunnelStarted = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'project_funnel_start' },
+  });
+
+  const projectFunnelCompleted = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'project_funnel_complete' },
+  });
+
+  const projectFunnelAbandoned = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'project_funnel_abandon' },
+  });
+
+  const projectSavedAsDraft = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'project_saved_as_draft' },
+  });
+
+  // Project creation time
+  const projectFunnelTimeStats = await Analytics.findOne({
+    where: {
+      ...funnelWhereBase,
+      eventName: 'project_funnel_complete',
+      duration: { [Op.ne]: null, [Op.gt]: 0 },
+    },
+    attributes: [
+      [fn("AVG", col("duration")), "avgDuration"],
+      [fn("MIN", col("duration")), "minDuration"],
+      [fn("MAX", col("duration")), "maxDuration"],
+    ],
+    raw: true,
+  });
+
+  // Project step-level drop-offs
+  const projectStepAbandons = await Analytics.findAll({
+    where: { ...funnelWhereBase, eventName: 'project_step_abandon' },
+    attributes: [
+      [literal("properties->>'step_name'"), "stepName"],
+      [fn("COUNT", col("id")), "count"],
+    ],
+    group: [literal("properties->>'step_name'")],
+    order: [[literal("count"), "DESC"]],
+    raw: true,
+  });
+
+  // Project step completion counts
+  const projectStepCompletions = await Analytics.findAll({
+    where: { ...funnelWhereBase, eventName: 'project_step_complete' },
+    attributes: [
+      [literal("properties->>'step_name'"), "stepName"],
+      [fn("COUNT", col("id")), "count"],
+      [fn("AVG", col("duration")), "avgDuration"],
+    ],
+    group: [literal("properties->>'step_name'")],
+    order: [[literal("properties->>'step_number'"), "ASC"]],
+    raw: true,
+  });
+
+  // Project step errors (friction points)
+  const projectStepErrors = await Analytics.findAll({
+    where: { ...funnelWhereBase, eventName: 'project_step_error' },
+    attributes: [
+      [literal("properties->>'step_name'"), "stepName"],
+      [literal("properties->>'error_message'"), "errorMessage"],
+      [fn("COUNT", col("id")), "count"],
+    ],
+    group: [literal("properties->>'step_name'"), literal("properties->>'error_message'")],
+    order: [[literal("count"), "DESC"]],
+    limit: 10,
+    raw: true,
+  });
+
+  // First project created count
+  const firstProjectsCreated = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'first_project_created' },
+  });
+
+  // Project marked complete (lifecycle tracking)
+  const projectsMarkedComplete = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'project_marked_complete' },
+  });
+
+  // ==========================================
+  // Friction Points - Top recurring issues
+  // ==========================================
+  
+  // Combine all step errors and sort by count
+  const allFrictionPoints = [
+    ...onboardingStepErrors.map(e => ({ 
+      ...e, 
+      funnel: 'onboarding',
+      count: parseInt(e.count) || 0 
+    })),
+    ...projectStepErrors.map(e => ({ 
+      ...e, 
+      funnel: 'project_creation',
+      count: parseInt(e.count) || 0 
+    })),
+  ].sort((a, b) => b.count - a.count).slice(0, 5);
+
+  // Format funnel analytics
+  const funnelAnalytics = {
+    onboarding: {
+      started: onboardingStarted,
+      completed: onboardingCompleted,
+      abandoned: onboardingAbandoned,
+      completionRate: onboardingStarted > 0 
+        ? ((onboardingCompleted / onboardingStarted) * 100).toFixed(1) 
+        : 0,
+      avgCompletionTimeMs: Math.round(parseFloat(onboardingTimeStats?.avgDuration) || 0),
+      stepDropOffs: onboardingStepAbandons.map(s => ({
+        stepName: s.stepName,
+        abandonCount: parseInt(s.count) || 0,
+      })),
+      stepCompletions: onboardingStepCompletions.map(s => ({
+        stepName: s.stepName,
+        completionCount: parseInt(s.count) || 0,
+        avgTimeMs: Math.round(parseFloat(s.avgDuration) || 0),
+      })),
+      stepErrors: onboardingStepErrors.map(e => ({
+        stepName: e.stepName,
+        errorMessage: e.errorMessage,
+        count: parseInt(e.count) || 0,
+      })),
+    },
+    projectCreation: {
+      started: projectFunnelStarted,
+      completed: projectFunnelCompleted,
+      abandoned: projectFunnelAbandoned,
+      savedAsDraft: projectSavedAsDraft,
+      completionRate: projectFunnelStarted > 0 
+        ? ((projectFunnelCompleted / projectFunnelStarted) * 100).toFixed(1) 
+        : 0,
+      avgCompletionTimeMs: Math.round(parseFloat(projectFunnelTimeStats?.avgDuration) || 0),
+      stepDropOffs: projectStepAbandons.map(s => ({
+        stepName: s.stepName,
+        abandonCount: parseInt(s.count) || 0,
+      })),
+      stepCompletions: projectStepCompletions.map(s => ({
+        stepName: s.stepName,
+        completionCount: parseInt(s.count) || 0,
+        avgTimeMs: Math.round(parseFloat(s.avgDuration) || 0),
+      })),
+      stepErrors: projectStepErrors.map(e => ({
+        stepName: e.stepName,
+        errorMessage: e.errorMessage,
+        count: parseInt(e.count) || 0,
+      })),
+      firstProjectsCreated,
+      projectsMarkedComplete,
+    },
+    topFrictionPoints: allFrictionPoints,
+  };
+
   res.status(200).json({
     success: true,
     data: {
@@ -573,6 +872,14 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
       users: usersData,
       projectsByStatus,
       projectsOverTime,
+      performanceMetrics,
+      funnelAnalytics,
+      // Include date range info for funnel analytics
+      funnelDateRange: {
+        startDate: funnelStart,
+        endDate: funnelEnd,
+        platform: platform || 'all',
+      },
     },
   });
 });
