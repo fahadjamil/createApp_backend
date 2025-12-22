@@ -679,11 +679,12 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
     where: { ...funnelWhereBase, eventName: 'onboarding_step_complete' },
     attributes: [
       [literal("properties->>'step_name'"), "stepName"],
+      [literal("MIN(CAST(properties->>'step_number' AS INTEGER))"), "stepNumber"],
       [fn("COUNT", col("id")), "count"],
       [fn("AVG", col("duration")), "avgDuration"],
     ],
     group: [literal("properties->>'step_name'")],
-    order: [[literal("properties->>'step_number'"), "ASC"]],
+    order: [[literal("MIN(CAST(properties->>'step_number' AS INTEGER))"), "ASC"]],
     raw: true,
   });
 
@@ -753,11 +754,12 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
     where: { ...funnelWhereBase, eventName: 'project_step_complete' },
     attributes: [
       [literal("properties->>'step_name'"), "stepName"],
+      [literal("MIN(CAST(properties->>'step_number' AS INTEGER))"), "stepNumber"],
       [fn("COUNT", col("id")), "count"],
       [fn("AVG", col("duration")), "avgDuration"],
     ],
     group: [literal("properties->>'step_name'")],
-    order: [[literal("properties->>'step_number'"), "ASC"]],
+    order: [[literal("MIN(CAST(properties->>'step_number' AS INTEGER))"), "ASC"]],
     raw: true,
   });
 
