@@ -1160,8 +1160,24 @@ app.get("/sync-db", async (req, res) => {
 // Database Connection
 db.sequelize
   .authenticate()
-  .then(() => {
+  .then(async () => {
     logger.info("Database connected successfully");
+    
+    // Add 'funnel' to eventCategory ENUM if it doesn't exist (PostgreSQL specific)
+    try {
+      await db.sequelize.query(`
+        DO $$ BEGIN
+          ALTER TYPE "enum_analytics_eventCategory" ADD VALUE IF NOT EXISTS 'funnel';
+        EXCEPTION
+          WHEN duplicate_object THEN null;
+        END $$;
+      `);
+      logger.info("Analytics eventCategory ENUM updated with 'funnel' value");
+    } catch (enumError) {
+      // Ignore errors if the enum type doesn't exist yet (first run)
+      logger.warn("Could not update eventCategory ENUM (may not exist yet):", enumError.message);
+    }
+    
     // Sync database schema (alter: true adds missing columns without dropping data)
     return db.sequelize.sync({ alter: true });
   })
