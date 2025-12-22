@@ -1154,19 +1154,53 @@ app.get("/admin/funnel-analytics", (req, res) => {
       if (start) url += '&startDate=' + start;
       if (platform) url += '&platform=' + platform;
       
+      // Show loading state
+      showLoading();
+      
       try {
         const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
         if (res.status === 401) { document.getElementById('logoutBtn').click(); return; }
+        
         const data = await res.json();
-        if (data.success) {
+        
+        if (data.success && data.data) {
           const f = data.data.funnelAnalytics || {};
           renderStats(f);
           renderFunnel('onboardingFunnel', f.onboarding, 'onboarding');
           renderFunnel('projectFunnel', f.projectCreation, 'project');
           renderFriction(f.topFrictionPoints);
           renderErrors(f.onboarding?.stepErrors, f.projectCreation?.stepErrors);
+        } else {
+          // API returned error or no data
+          showEmptyState('API returned an error: ' + (data.message || 'Unknown error'));
         }
-      } catch (err) { console.error(err); }
+      } catch (err) { 
+        console.error('[Funnel Analytics] Fetch error:', err);
+        showEmptyState('Failed to load data: ' + (err.message || 'Network error'));
+      }
+    }
+    
+    function showLoading() {
+      const loadingHTML = '<div class="loading"><div class="spinner"></div><span>Loading...</span></div>';
+      document.getElementById('onboardingFunnel').innerHTML = loadingHTML;
+      document.getElementById('projectFunnel').innerHTML = loadingHTML;
+      document.getElementById('frictionPoints').innerHTML = loadingHTML;
+      document.getElementById('stepErrors').innerHTML = loadingHTML;
+    }
+    
+    function showEmptyState(errorMsg) {
+      const emptyHTML = '<div class="empty-state"><p>' + (errorMsg || 'No data available') + '</p></div>';
+      document.getElementById('onboardingFunnel').innerHTML = emptyHTML;
+      document.getElementById('projectFunnel').innerHTML = emptyHTML;
+      document.getElementById('frictionPoints').innerHTML = emptyHTML;
+      document.getElementById('stepErrors').innerHTML = emptyHTML;
+      // Clear stats
+      document.getElementById('onboardingStarted').textContent = '0';
+      document.getElementById('onboardingRate').textContent = '0%';
+      document.getElementById('projectsStarted').textContent = '0';
+      document.getElementById('projectRate').textContent = '0%';
+      document.getElementById('firstProjects').textContent = '0';
+      document.getElementById('frictionCount').textContent = '0';
     }
     
     function renderStats(f) {
