@@ -251,10 +251,10 @@ app.post("/admin/analytics/login", (req, res) => {
   const { email, password } = req.body;
   
   // Hardcoded admin credentials
-  if (email === 'admin' && password === 'admin') {
+  if (email === 'admin@gmail.com' && password === 'admin') {
     const jwt = require('jsonwebtoken');
     const token = jwt.sign(
-      { uid: 'admin', email: 'admin', role: 'admin' },
+      { uid: 'admin', email: 'admin@gmail.com', role: 'admin' },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
