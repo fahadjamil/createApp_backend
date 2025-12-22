@@ -129,7 +129,13 @@ const validate = (schemaName) => {
     }
 
     if (errors.length > 0) {
-      return next(new ValidationError("Validation failed", errors));
+      // Log validation errors for debugging
+      console.log("Validation errors for", schemaName + ":", JSON.stringify(errors, null, 2));
+      console.log("Request body:", JSON.stringify(req.body, null, 2));
+      
+      // Create a more descriptive error message
+      const errorDetails = errors.map(e => `${e.field}: ${e.message}`).join(", ");
+      return next(new ValidationError(`Validation failed: ${errorDetails}`, errors));
     }
 
     next();

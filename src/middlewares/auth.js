@@ -75,6 +75,7 @@ const authorize = (...roles) => {
 
 module.exports = {
   authenticate,
+  verifyToken: authenticate, // Alias for consistency
   optionalAuth,
   authorize,
 };

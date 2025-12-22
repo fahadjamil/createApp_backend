@@ -40,7 +40,8 @@ db.sequelize = sequelize;
 db.User = require("./User/user.model")(sequelize, Sequelize);
 db.Project = require("./Project/project.modal")(sequelize, Sequelize);
 db.DraftProject = require("./Project/draftProject.modal")(sequelize, Sequelize);
-db.Client = require("./Client/client.model")(sequelize, Sequelize); // ✅ New Client model
+db.Client = require("./Client/client.model")(sequelize, Sequelize);
+db.Analytics = require("./Analytics/analytics.model")(sequelize, Sequelize);
 
 
 // ✅ Associations
@@ -65,6 +66,17 @@ db.Client.belongsTo(db.Project, {
   onUpdate: "CASCADE",
 });
 
+// Analytics ↔ User Association
+db.Analytics.belongsTo(db.User, {
+  foreignKey: "userId",
+  as: "user",
+  onDelete: "SET NULL",
+  onUpdate: "CASCADE",
+});
+db.User.hasMany(db.Analytics, {
+  foreignKey: "userId",
+  as: "analyticsEvents",
+});
 
 module.exports = db;
 
