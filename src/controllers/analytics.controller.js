@@ -450,6 +450,134 @@ const getRealtime = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Get admin dashboard analytics with users, projects, and clients
+ * GET /api/analytics/admin-dashboard
+ */
+const getAdminDashboard = asyncHandler(async (req, res) => {
+  const User = db.User;
+  const Project = db.Project;
+  const Client = db.Client;
+
+  // Get all users with their projects and clients counts
+  const users = await User.findAll({
+    attributes: { exclude: ["password", "resetPasswordToken", "resetPasswordExpires"] },
+    order: [["createdAt", "DESC"]],
+    include: [
+      {
+        model: Project,
+        as: "projects",
+        attributes: ["pid", "projectName", "projectType", "projectStatus", "projectAmount", "startDate", "endDate", "createdAt"],
+        required: false,
+      },
+      {
+        model: Client,
+        as: "clients",
+        attributes: ["cid", "fullName", "company", "email", "phone", "clientType", "createdAt"],
+        required: false,
+      },
+    ],
+  });
+
+  // Calculate stats
+  const totalUsers = users.length;
+  const totalProjects = await Project.count();
+  const totalClients = await Client.count();
+
+  // Active projects (not completed)
+  const activeProjects = await Project.count({
+    where: {
+      projectStatus: {
+        [Op.or]: [
+          { [Op.eq]: null },
+          { [Op.notIn]: ["completed", "cancelled"] },
+        ],
+      },
+    },
+  });
+
+  // Recent signups (last 30 days)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const recentSignups = await User.count({
+    where: {
+      createdAt: { [Op.gte]: thirtyDaysAgo },
+    },
+  });
+
+  // Users with projects
+  const usersWithProjects = users.filter(u => u.projects && u.projects.length > 0).length;
+
+  // Format users data for frontend
+  const usersData = users.map(user => ({
+    uid: user.uid,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    fullName: user.full_name,
+    phone: user.phone,
+    role: user.role,
+    avatarUrl: user.avatar_url,
+    createdAt: user.createdAt,
+    lastLogin: user.updatedAt,
+    projectsCount: user.projects ? user.projects.length : 0,
+    clientsCount: user.clients ? user.clients.length : 0,
+    projects: user.projects || [],
+    clients: user.clients || [],
+  }));
+
+  // Get project status distribution
+  const projectsByStatus = await Project.findAll({
+    attributes: [
+      "projectStatus",
+      [fn("COUNT", col("pid")), "count"],
+    ],
+    group: ["projectStatus"],
+    raw: true,
+  });
+
+  // Get projects over time (last 6 months)
+  const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+  const projectsOverTime = await Project.findAll({
+    where: {
+      createdAt: { [Op.gte]: sixMonthsAgo },
+    },
+    attributes: [
+      [fn("DATE_TRUNC", "month", col("createdAt")), "month"],
+      [fn("COUNT", col("pid")), "count"],
+    ],
+    group: [fn("DATE_TRUNC", "month", col("createdAt"))],
+    order: [[fn("DATE_TRUNC", "month", col("createdAt")), "ASC"]],
+    raw: true,
+  });
+
+  // Total revenue (sum of projectAmount)
+  const revenueResult = await Project.findOne({
+    attributes: [
+      [fn("SUM", col("projectAmount")), "totalRevenue"],
+    ],
+    raw: true,
+  });
+  const totalRevenue = parseFloat(revenueResult?.totalRevenue) || 0;
+
+  res.status(200).json({
+    success: true,
+    data: {
+      overview: {
+        totalUsers,
+        totalProjects,
+        totalClients,
+        activeProjects,
+        recentSignups,
+        usersWithProjects,
+        totalRevenue,
+      },
+      users: usersData,
+      projectsByStatus,
+      projectsOverTime,
+    },
+  });
+});
+
+/**
  * Get user analytics
  * GET /api/analytics/user/:userId
  */
@@ -539,5 +667,6 @@ module.exports = {
   getSessionJourney,
   getRealtime,
   getUserAnalytics,
+  getAdminDashboard,
 };
 

@@ -12,5 +12,8 @@ module.exports = (app) => {
   app.get("/api/analytics/realtime", verifyToken, analyticsController.getRealtime);
   app.get("/api/analytics/session/:sessionId", verifyToken, analyticsController.getSessionJourney);
   app.get("/api/analytics/user/:userId", verifyToken, analyticsController.getUserAnalytics);
+  
+  // Admin dashboard with users, projects, and clients
+  app.get("/api/analytics/admin-dashboard", verifyToken, analyticsController.getAdminDashboard);
 };
 
