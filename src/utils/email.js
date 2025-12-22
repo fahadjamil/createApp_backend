@@ -30,9 +30,18 @@ const DEFAULT_FROM = process.env.GMAIL_USER || process.env.RESEND_FROM_EMAIL || 
  * @returns {Promise<boolean>}
  */
 const sendEmail = async ({ to, subject, html, text }) => {
+  logger.info("Attempting to send email", { 
+    to, 
+    subject,
+    hasGmailUser: !!process.env.GMAIL_USER,
+    hasGmailPassword: !!process.env.GMAIL_APP_PASSWORD,
+    hasResendKey: !!process.env.RESEND_API_KEY
+  });
+
   // Try Gmail SMTP first (works without domain verification)
   if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
     try {
+      logger.info("Using Gmail SMTP", { user: process.env.GMAIL_USER });
       const transporter = createGmailTransporter();
       
       const result = await transporter.sendMail({
@@ -46,8 +55,18 @@ const sendEmail = async ({ to, subject, html, text }) => {
       logger.info("Email sent via Gmail SMTP", { messageId: result.messageId, to });
       return true;
     } catch (error) {
-      logger.error("Gmail SMTP failed, trying Resend", { error: error.message, to });
+      logger.error("Gmail SMTP failed", { 
+        error: error.message, 
+        code: error.code,
+        command: error.command,
+        to 
+      });
     }
+  } else {
+    logger.warn("Gmail credentials not configured", {
+      GMAIL_USER: process.env.GMAIL_USER ? "SET" : "NOT SET",
+      GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD ? "SET" : "NOT SET"
+    });
   }
 
   // Fallback to Resend

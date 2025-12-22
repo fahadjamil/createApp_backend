@@ -62,6 +62,12 @@ module.exports = (app) => {
     userController.testPassword
   );
 
+  // Test email sending (DEVELOPMENT ONLY - REMOVE IN PRODUCTION)
+  router.post(
+    "/test-email",
+    userController.testEmail
+  );
+
   // Reset password with token
   router.post(
     "/reset-password",

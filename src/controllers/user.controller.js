@@ -14,7 +14,7 @@ const {
 } = require("../middlewares/errorHandler");
 const logger = require("../utils/logger");
 const { HTTP_STATUS, MESSAGES, TOKEN_EXPIRY } = require("../utils/constants");
-const { sendPasswordResetEmail, sendPasswordResetLinkEmail, sendWelcomeEmail } = require("../utils/email");
+const { sendPasswordResetEmail, sendPasswordResetLinkEmail, sendWelcomeEmail, sendEmail } = require("../utils/email");
 
 // Initialize Firebase Admin if not already initialized
 const initFirebaseAdmin = () => {
@@ -688,6 +688,56 @@ exports.verifyFirebaseToken = asyncHandler(async (req, res) => {
     }
     
     throw new BadRequestError("Firebase verification failed: " + error.message);
+  }
+});
+
+/**
+ * @desc    Test email sending (DEVELOPMENT ONLY)
+ * @route   POST /user/test-email
+ * @access  Public
+ */
+exports.testEmail = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new BadRequestError("Email is required");
+  }
+
+  logger.info("Testing email sending", { 
+    to: email,
+    GMAIL_USER: process.env.GMAIL_USER ? "SET" : "NOT SET",
+    GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD ? "SET (length: " + process.env.GMAIL_APP_PASSWORD.length + ")" : "NOT SET",
+    RESEND_API_KEY: process.env.RESEND_API_KEY ? "SET" : "NOT SET"
+  });
+
+  try {
+    const result = await sendEmail({
+      to: email,
+      subject: "Test Email from Create App",
+      html: `<h1>Test Email</h1><p>This is a test email sent at ${new Date().toISOString()}</p>`,
+      text: `Test email sent at ${new Date().toISOString()}`,
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: result,
+      message: result ? "Test email sent successfully!" : "Failed to send test email",
+      config: {
+        GMAIL_USER: process.env.GMAIL_USER ? "SET" : "NOT SET",
+        GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD ? "SET" : "NOT SET",
+        RESEND_API_KEY: process.env.RESEND_API_KEY ? "SET" : "NOT SET"
+      }
+    });
+  } catch (error) {
+    logger.error("Test email failed", { error: error.message });
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: error.message,
+      config: {
+        GMAIL_USER: process.env.GMAIL_USER ? "SET" : "NOT SET",
+        GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD ? "SET" : "NOT SET",
+        RESEND_API_KEY: process.env.RESEND_API_KEY ? "SET" : "NOT SET"
+      }
+    });
   }
 });
 
