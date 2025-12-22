@@ -1,23 +1,85 @@
 /**
- * Email Service using Resend
- * @see https://resend.com/docs
+ * Email Service using Nodemailer (Gmail SMTP) with Resend fallback
+ * Gmail SMTP works immediately without domain verification
  */
 
+const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
 const logger = require("./logger");
 
-// Initialize Resend with API key
+// Initialize Resend (fallback)
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Default sender email (must be verified in Resend dashboard)
-const DEFAULT_FROM = process.env.RESEND_FROM_EMAIL || "Create App <noreply@createit.pk>";
+// Initialize Gmail transporter
+const createGmailTransporter = () => {
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD, // Use App Password, not regular password
+    },
+  });
+};
+
+// Default sender
+const DEFAULT_FROM = process.env.GMAIL_USER || process.env.RESEND_FROM_EMAIL || "noreply@createit.pk";
+
+/**
+ * Send email using Gmail SMTP (primary) or Resend (fallback)
+ * @param {Object} options - Email options
+ * @returns {Promise<boolean>}
+ */
+const sendEmail = async ({ to, subject, html, text }) => {
+  // Try Gmail SMTP first (works without domain verification)
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    try {
+      const transporter = createGmailTransporter();
+      
+      const result = await transporter.sendMail({
+        from: `Create App <${process.env.GMAIL_USER}>`,
+        to: to,
+        subject: subject,
+        html: html,
+        text: text,
+      });
+
+      logger.info("Email sent via Gmail SMTP", { messageId: result.messageId, to });
+      return true;
+    } catch (error) {
+      logger.error("Gmail SMTP failed, trying Resend", { error: error.message, to });
+    }
+  }
+
+  // Fallback to Resend
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const { data, error } = await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL || "Create App <onboarding@resend.dev>",
+        to: [to],
+        subject: subject,
+        html: html,
+        text: text,
+      });
+
+      if (error) {
+        logger.error("Resend failed", { error, to });
+        return false;
+      }
+
+      logger.info("Email sent via Resend", { emailId: data.id, to });
+      return true;
+    } catch (error) {
+      logger.error("Resend error", { error: error.message, to });
+      return false;
+    }
+  }
+
+  logger.error("No email service configured", { to });
+  return false;
+};
 
 /**
  * Send password reset email with new temporary password
- * @param {string} to - Recipient email address
- * @param {string} newPassword - The new temporary password
- * @param {string} firstName - User's first name
- * @returns {Promise<boolean>} - True if email sent successfully
  */
 const sendPasswordResetEmail = async (to, newPassword, firstName = "User") => {
   const html = `
@@ -33,27 +95,20 @@ const sendPasswordResetEmail = async (to, newPassword, firstName = "User") => {
         <tr>
           <td align="center">
             <table width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-              <!-- Header -->
               <tr>
                 <td style="background-color: #0a1a33; padding: 30px; text-align: center;">
                   <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">Create</h1>
                 </td>
               </tr>
-              
-              <!-- Content -->
               <tr>
                 <td style="padding: 40px 30px;">
                   <h2 style="margin: 0 0 20px; color: #0a1a33; font-size: 24px; font-weight: 600;">Your New Password</h2>
-                  
                   <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
                     Hello ${firstName},
                   </p>
-                  
                   <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
-                    We received a request to reset your password for your Create account. Your new temporary password is:
+                    Your new temporary password is:
                   </p>
-                  
-                  <!-- Password Box -->
                   <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
                     <tr>
                       <td align="center">
@@ -65,29 +120,13 @@ const sendPasswordResetEmail = async (to, newPassword, firstName = "User") => {
                       </td>
                     </tr>
                   </table>
-                  
                   <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
-                    Please use this password to log in to your account. We strongly recommend changing your password after logging in for security purposes.
-                  </p>
-                  
-                  <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
-                  
-                  <p style="margin: 0 0 10px; color: #ff6b6b; font-size: 14px; line-height: 1.5; font-weight: 600;">
-                    ⚠️ Security Notice
-                  </p>
-                  
-                  <p style="margin: 0; color: #999999; font-size: 13px; line-height: 1.5;">
-                    If you didn't request a password reset, please contact us immediately at <a href="mailto:dev@createit.pk" style="color: #0a1a33;">dev@createit.pk</a> as someone may be trying to access your account.
+                    Please change your password after logging in.
                   </p>
                 </td>
               </tr>
-              
-              <!-- Footer -->
               <tr>
                 <td style="background-color: #f9f9f9; padding: 25px 30px; text-align: center; border-top: 1px solid #eeeeee;">
-                  <p style="margin: 0 0 10px; color: #666666; font-size: 13px;">
-                    Need help? Contact us at <a href="mailto:dev@createit.pk" style="color: #0a1a33;">dev@createit.pk</a>
-                  </p>
                   <p style="margin: 0; color: #999999; font-size: 12px;">
                     © ${new Date().getFullYear()} Create App. All rights reserved.
                   </p>
@@ -101,47 +140,18 @@ const sendPasswordResetEmail = async (to, newPassword, firstName = "User") => {
     </html>
   `;
 
-  const text = `
-Hello ${firstName},
+  const text = `Hello ${firstName},\n\nYour new temporary password is: ${newPassword}\n\nPlease change your password after logging in.\n\n- The Create App Team`;
 
-We received a request to reset your password for your Create account.
-
-Your new temporary password is: ${newPassword}
-
-Please use this password to log in to your account. We strongly recommend changing your password after logging in for security purposes.
-
-If you didn't request a password reset, please contact us immediately at dev@createit.pk
-
-- The Create App Team
-  `;
-
-  try {
-    const { data, error } = await resend.emails.send({
-      from: DEFAULT_FROM,
-      to: [to],
-      subject: "Reset your Create App password",
-      html: html,
-      text: text,
-    });
-
-    if (error) {
-      logger.error("Failed to send password reset email via Resend", { error, to });
-      return false;
-    }
-
-    logger.info("Password reset email sent successfully", { emailId: data.id, to });
-    return true;
-  } catch (error) {
-    logger.error("Error sending password reset email", { error: error.message, to });
-    return false;
-  }
+  return sendEmail({
+    to,
+    subject: "Reset your Create App password",
+    html,
+    text,
+  });
 };
 
 /**
  * Send welcome email after signup
- * @param {string} to - Recipient email address
- * @param {string} firstName - User's first name
- * @returns {Promise<boolean>}
  */
 const sendWelcomeEmail = async (to, firstName = "User") => {
   const html = `
@@ -169,9 +179,6 @@ const sendWelcomeEmail = async (to, firstName = "User") => {
                   <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
                     Welcome to Create App! We're excited to have you on board.
                   </p>
-                  <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
-                    Start managing your projects, clients, and finances all in one place.
-                  </p>
                   <p style="margin: 0; color: #666666; font-size: 14px;">
                     - The Create App Team
                   </p>
@@ -185,33 +192,15 @@ const sendWelcomeEmail = async (to, firstName = "User") => {
     </html>
   `;
 
-  try {
-    const { data, error } = await resend.emails.send({
-      from: DEFAULT_FROM,
-      to: [to],
-      subject: "Welcome to Create App! 🎉",
-      html: html,
-    });
-
-    if (error) {
-      logger.error("Failed to send welcome email", { error, to });
-      return false;
-    }
-
-    logger.info("Welcome email sent", { emailId: data.id, to });
-    return true;
-  } catch (error) {
-    logger.error("Error sending welcome email", { error: error.message, to });
-    return false;
-  }
+  return sendEmail({
+    to,
+    subject: "Welcome to Create App! 🎉",
+    html,
+  });
 };
 
 /**
  * Send password reset link email (secure token-based)
- * @param {string} to - Recipient email address
- * @param {string} resetUrl - The password reset URL with token
- * @param {string} firstName - User's first name
- * @returns {Promise<boolean>} - True if email sent successfully
  */
 const sendPasswordResetLinkEmail = async (to, resetUrl, firstName = "User") => {
   const html = `
@@ -227,27 +216,20 @@ const sendPasswordResetLinkEmail = async (to, resetUrl, firstName = "User") => {
         <tr>
           <td align="center">
             <table width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-              <!-- Header -->
               <tr>
                 <td style="background-color: #0a1a33; padding: 30px; text-align: center;">
                   <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">Create</h1>
                 </td>
               </tr>
-              
-              <!-- Content -->
               <tr>
                 <td style="padding: 40px 30px;">
                   <h2 style="margin: 0 0 20px; color: #0a1a33; font-size: 24px; font-weight: 600;">Reset Your Password</h2>
-                  
                   <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
                     Hello ${firstName},
                   </p>
-                  
                   <p style="margin: 0 0 20px; color: #333333; font-size: 16px; line-height: 1.6;">
                     We received a request to reset your password. Click the button below to choose a new password:
                   </p>
-                  
-                  <!-- CTA Button -->
                   <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
                     <tr>
                       <td align="center">
@@ -258,31 +240,21 @@ const sendPasswordResetLinkEmail = async (to, resetUrl, firstName = "User") => {
                       </td>
                     </tr>
                   </table>
-                  
                   <p style="margin: 0 0 10px; color: #666666; font-size: 14px; line-height: 1.6;">
                     Or copy and paste this link into your browser:
                   </p>
                   <p style="margin: 0 0 20px; color: #0a1a33; font-size: 14px; word-break: break-all;">
                     ${resetUrl}
                   </p>
-                  
                   <p style="margin: 0 0 20px; color: #333333; font-size: 14px; line-height: 1.6;">
                     <strong>This link will expire in 1 hour.</strong>
                   </p>
-                  
                   <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
-                  
-                  <p style="margin: 0 0 10px; color: #ff6b6b; font-size: 14px; line-height: 1.5; font-weight: 600;">
-                    ⚠️ Didn't request this?
-                  </p>
-                  
                   <p style="margin: 0; color: #999999; font-size: 13px; line-height: 1.5;">
-                    If you didn't request a password reset, you can safely ignore this email. Your password won't be changed.
+                    If you didn't request a password reset, you can safely ignore this email.
                   </p>
                 </td>
               </tr>
-              
-              <!-- Footer -->
               <tr>
                 <td style="background-color: #f9f9f9; padding: 25px 30px; text-align: center; border-top: 1px solid #eeeeee;">
                   <p style="margin: 0 0 10px; color: #666666; font-size: 13px;">
@@ -301,46 +273,19 @@ const sendPasswordResetLinkEmail = async (to, resetUrl, firstName = "User") => {
     </html>
   `;
 
-  const text = `
-Hello ${firstName},
+  const text = `Hello ${firstName},\n\nWe received a request to reset your password.\n\nClick the link below to reset your password:\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you didn't request this, you can safely ignore this email.\n\n- The Create App Team`;
 
-We received a request to reset your password.
-
-Click the link below to reset your password:
-${resetUrl}
-
-This link will expire in 1 hour.
-
-If you didn't request this, you can safely ignore this email.
-
-- The Create App Team
-  `;
-
-  try {
-    const { data, error } = await resend.emails.send({
-      from: DEFAULT_FROM,
-      to: [to],
-      subject: "Reset your Create App password",
-      html: html,
-      text: text,
-    });
-
-    if (error) {
-      logger.error("Failed to send password reset link email via Resend", { error, to });
-      return false;
-    }
-
-    logger.info("Password reset link email sent successfully", { emailId: data.id, to });
-    return true;
-  } catch (error) {
-    logger.error("Error sending password reset link email", { error: error.message, to });
-    return false;
-  }
+  return sendEmail({
+    to,
+    subject: "Reset your Create App password",
+    html,
+    text,
+  });
 };
 
 module.exports = {
+  sendEmail,
   sendPasswordResetEmail,
   sendPasswordResetLinkEmail,
   sendWelcomeEmail,
 };
-
