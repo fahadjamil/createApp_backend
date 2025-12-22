@@ -34,6 +34,7 @@ module.exports = (sequelize, Sequelize) => {
           "dashboard",
           "error",
           "engagement",
+          "funnel",
           "other"
         ),
         defaultValue: "other",
