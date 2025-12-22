@@ -74,6 +74,12 @@ module.exports = (sequelize, Sequelize) => {
         allowNull: true,
       },
 
+      // Firebase UID for reference (optional)
+      firebaseUid: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+
       // Flags / status
       isEmailVerified: {
         type: DataTypes.BOOLEAN,
