@@ -22,7 +22,7 @@ const createGmailTransporter = () => {
 };
 
 // Default sender
-const DEFAULT_FROM = process.env.GMAIL_USER || process.env.RESEND_FROM_EMAIL || "noreply@createit.pk";
+const DEFAULT_FROM = process.env.GMAIL_USER || process.env.RESEND_FROM_EMAIL || "info@createit.pk";
 
 /**
  * Send email using Gmail SMTP (primary) or Resend (fallback)
@@ -73,7 +73,7 @@ const sendEmail = async ({ to, subject, html, text }) => {
   if (process.env.RESEND_API_KEY) {
     try {
       const { data, error } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || "Create App <onboarding@resend.dev>",
+        from: process.env.RESEND_FROM_EMAIL || "Create App <info@createit.pk>",
         to: [to],
         subject: subject,
         html: html,
@@ -277,7 +277,7 @@ const sendPasswordResetLinkEmail = async (to, resetUrl, firstName = "User") => {
               <tr>
                 <td style="background-color: #f9f9f9; padding: 25px 30px; text-align: center; border-top: 1px solid #eeeeee;">
                   <p style="margin: 0 0 10px; color: #666666; font-size: 13px;">
-                    Need help? Contact us at <a href="mailto:dev@createit.pk" style="color: #0a1a33;">dev@createit.pk</a>
+                    Need help? Contact us at <a href="mailto:info@createit.pk" style="color: #0a1a33;">info@createit.pk</a>
                   </p>
                   <p style="margin: 0; color: #999999; font-size: 12px;">
                     © ${new Date().getFullYear()} Create App. All rights reserved.
