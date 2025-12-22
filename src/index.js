@@ -246,6 +246,32 @@ app.get("/reset-password", (req, res) => {
   res.send(resetPasswordHTML);
 });
 
+// Admin Analytics Login Endpoint
+app.post("/admin/analytics/login", (req, res) => {
+  const { email, password } = req.body;
+  
+  // Hardcoded admin credentials
+  if (email === 'admin' && password === 'admin') {
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign(
+      { uid: 'admin', email: 'admin', role: 'admin' },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Admin login successful',
+      token
+    });
+  }
+  
+  return res.status(401).json({
+    success: false,
+    message: 'Invalid admin credentials'
+  });
+});
+
 // Analytics Admin Dashboard Page (served from backend)
 app.get("/admin/analytics", (req, res) => {
   res.setHeader(
@@ -562,7 +588,7 @@ app.get("/admin/analytics", (req, res) => {
       fetchAnalytics();
     }
     
-    // Login
+    // Login - Admin only
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       loginBtn.disabled = true;
@@ -570,7 +596,7 @@ app.get("/admin/analytics", (req, res) => {
       loginError.classList.remove('show');
       
       try {
-        const res = await fetch(API_BASE + '/user/login', {
+        const res = await fetch(API_BASE + '/admin/analytics/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -586,7 +612,7 @@ app.get("/admin/analytics", (req, res) => {
           showDashboard();
           fetchAnalytics();
         } else {
-          loginError.textContent = data.message || 'Login failed';
+          loginError.textContent = data.message || 'Invalid admin credentials';
           loginError.classList.add('show');
         }
       } catch (err) {
