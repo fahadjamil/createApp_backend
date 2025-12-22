@@ -788,6 +788,58 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
   });
 
   // ==========================================
+  // Draft Update Tracking
+  // ==========================================
+  
+  const draftUpdateStarted = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'draft_update_start' },
+  });
+
+  const draftUpdateCompleted = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'draft_update_complete' },
+  });
+
+  const draftUpdateTimeStats = await Analytics.findOne({
+    where: {
+      ...funnelWhereBase,
+      eventName: 'draft_update_complete',
+      duration: { [Op.ne]: null, [Op.gt]: 0 },
+    },
+    attributes: [
+      [fn("AVG", col("duration")), "avgDuration"],
+      [fn("MIN", col("duration")), "minDuration"],
+      [fn("MAX", col("duration")), "maxDuration"],
+    ],
+    raw: true,
+  });
+
+  // ==========================================
+  // Client Creation Tracking
+  // ==========================================
+  
+  const clientCreationStarted = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'client_creation_start' },
+  });
+
+  const clientCreationCompleted = await Analytics.count({
+    where: { ...funnelWhereBase, eventName: 'client_creation_complete' },
+  });
+
+  const clientCreationTimeStats = await Analytics.findOne({
+    where: {
+      ...funnelWhereBase,
+      eventName: 'client_creation_complete',
+      duration: { [Op.ne]: null, [Op.gt]: 0 },
+    },
+    attributes: [
+      [fn("AVG", col("duration")), "avgDuration"],
+      [fn("MIN", col("duration")), "minDuration"],
+      [fn("MAX", col("duration")), "maxDuration"],
+    ],
+    raw: true,
+  });
+
+  // ==========================================
   // Friction Points - Top recurring issues
   // ==========================================
   
@@ -855,6 +907,26 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
       })),
       firstProjectsCreated,
       projectsMarkedComplete,
+    },
+    draftUpdate: {
+      started: draftUpdateStarted,
+      completed: draftUpdateCompleted,
+      completionRate: draftUpdateStarted > 0 
+        ? ((draftUpdateCompleted / draftUpdateStarted) * 100).toFixed(1) 
+        : 0,
+      avgCompletionTimeMs: Math.round(parseFloat(draftUpdateTimeStats?.avgDuration) || 0),
+      minCompletionTimeMs: Math.round(parseFloat(draftUpdateTimeStats?.minDuration) || 0),
+      maxCompletionTimeMs: Math.round(parseFloat(draftUpdateTimeStats?.maxDuration) || 0),
+    },
+    clientCreation: {
+      started: clientCreationStarted,
+      completed: clientCreationCompleted,
+      completionRate: clientCreationStarted > 0 
+        ? ((clientCreationCompleted / clientCreationStarted) * 100).toFixed(1) 
+        : 0,
+      avgCompletionTimeMs: Math.round(parseFloat(clientCreationTimeStats?.avgDuration) || 0),
+      minCompletionTimeMs: Math.round(parseFloat(clientCreationTimeStats?.minDuration) || 0),
+      maxCompletionTimeMs: Math.round(parseFloat(clientCreationTimeStats?.maxDuration) || 0),
     },
     topFrictionPoints: allFrictionPoints,
   };
