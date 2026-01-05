@@ -464,6 +464,8 @@ app.get("/admin/analytics", (req, res) => {
           <span class="header-title">📊 Analytics Dashboard</span>
         </div>
         <div class="header-right">
+          <a href="/admin/notifications" class="refresh-btn" style="text-decoration: none;">🔔 Push Notifications</a>
+          <a href="/admin/funnel-analytics" class="refresh-btn" style="text-decoration: none;">⏱️ Funnel Analytics</a>
           <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
           <button id="logoutBtn" class="logout-btn">Logout</button>
         </div>
@@ -955,6 +957,7 @@ app.get("/admin/funnel-analytics", (req, res) => {
           </select>
           <button id="refreshBtn" class="btn btn-refresh">🔄 Refresh</button>
           <a href="/admin/analytics" class="btn btn-back">📈 Events</a>
+          <a href="/admin/notifications" class="btn btn-back">🔔 Push Notifications</a>
           <button id="logoutBtn" class="btn btn-logout">Logout</button>
         </div>
       </div>
@@ -1269,6 +1272,7 @@ app.get("/admin/notifications", (req, res) => {
         </div>
         <div class="header-right">
           <a href="/admin/analytics" class="btn btn-back">📈 Analytics</a>
+          <a href="/admin/funnel-analytics" class="btn btn-back">⏱️ Funnel</a>
           <button id="logoutBtn" class="btn btn-logout">Logout</button>
         </div>
       </div>
