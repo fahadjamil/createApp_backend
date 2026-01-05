@@ -42,6 +42,8 @@ db.Project = require("./Project/project.modal")(sequelize, Sequelize);
 db.DraftProject = require("./Project/draftProject.modal")(sequelize, Sequelize);
 db.Client = require("./Client/client.model")(sequelize, Sequelize);
 db.Analytics = require("./Analytics/analytics.model")(sequelize, Sequelize);
+db.PushToken = require("./Notification/pushToken.model")(sequelize, Sequelize);
+db.Notification = require("./Notification/notification.model")(sequelize, Sequelize);
 
 
 // ✅ Associations
@@ -76,6 +78,30 @@ db.Analytics.belongsTo(db.User, {
 db.User.hasMany(db.Analytics, {
   foreignKey: "userId",
   as: "analyticsEvents",
+});
+
+// PushToken ↔ User Association
+db.PushToken.belongsTo(db.User, {
+  foreignKey: "userId",
+  as: "user",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+db.User.hasMany(db.PushToken, {
+  foreignKey: "userId",
+  as: "pushTokens",
+});
+
+// Notification ↔ User Association
+db.Notification.belongsTo(db.User, {
+  foreignKey: "userId",
+  as: "user",
+  onDelete: "CASCADE",
+  onUpdate: "CASCADE",
+});
+db.User.hasMany(db.Notification, {
+  foreignKey: "userId",
+  as: "notifications",
 });
 
 module.exports = db;
