@@ -1140,6 +1140,385 @@ app.get("/admin/funnel-analytics", (req, res) => {
   res.send(funnelHTML);
 });
 
+// Push Notification Admin Page
+app.get("/admin/notifications", (req, res) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' http://localhost:* https://*.vercel.app"
+  );
+  const notificationsHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Push Notifications - Create App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-50: #eff6ff; --primary-100: #dbeafe; --primary-200: #bfdbfe;
+      --primary-500: #3b82f6; --primary-600: #2563eb; --primary-700: #1d4ed8;
+      --primary-900: #0f172a;
+      --success-100: #dcfce7; --success-500: #22c55e; --success-600: #16a34a;
+      --warning-100: #fef3c7; --warning-500: #f59e0b;
+      --error-100: #fee2e2; --error-500: #ef4444;
+      --neutral-50: #f8fafc; --neutral-100: #f1f5f9; --neutral-200: #e2e8f0;
+      --text-primary: #0f172a; --text-secondary: #475569; --text-tertiary: #64748b;
+      --bg-primary: #f8fafc; --bg-secondary: #ffffff;
+      --border-light: #e2e8f0;
+      --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px;
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg-primary); min-height: 100vh; color: var(--text-primary); }
+    
+    .login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--primary-900) 0%, #1e3a5f 100%); padding: 20px; }
+    .login-card { background: var(--bg-secondary); border-radius: var(--radius-xl); padding: 40px; width: 100%; max-width: 400px; box-shadow: var(--shadow-md); }
+    .login-logo { font-size: 28px; font-weight: 800; color: var(--primary-600); text-align: center; margin-bottom: 8px; }
+    .login-subtitle { color: var(--text-tertiary); text-align: center; margin-bottom: 32px; font-size: 14px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px 16px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 14px; font-family: inherit; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-500); box-shadow: 0 0 0 3px var(--primary-100); }
+    .form-group textarea { min-height: 100px; resize: vertical; }
+    .login-btn, .send-btn { width: 100%; padding: 14px; background: var(--primary-600); color: white; border: none; border-radius: var(--radius-md); font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .login-btn:hover, .send-btn:hover { background: var(--primary-700); }
+    .login-btn:disabled, .send-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+    .login-error, .message { padding: 12px; border-radius: var(--radius-md); margin-bottom: 20px; font-size: 14px; display: none; }
+    .login-error { background: var(--error-100); color: var(--error-500); }
+    .message.success { background: var(--success-100); color: var(--success-600); display: block; }
+    .message.error { background: var(--error-100); color: var(--error-500); display: block; }
+    .login-error.show { display: block; }
+    
+    .dashboard { display: none; }
+    .dashboard.show { display: block; }
+    .header { background: var(--bg-secondary); border-bottom: 1px solid var(--border-light); padding: 16px 24px; position: sticky; top: 0; z-index: 100; }
+    .header-content { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-logo { font-size: 22px; font-weight: 800; color: var(--primary-600); }
+    .header-title { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .btn { padding: 8px 16px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; border: 1px solid; transition: all 0.2s; text-decoration: none; }
+    .btn-back { background: var(--neutral-100); color: var(--text-secondary); border-color: var(--border-light); }
+    .btn-logout { background: var(--neutral-100); color: var(--text-secondary); border-color: var(--border-light); }
+    .btn-logout:hover { background: var(--error-100); color: var(--error-500); }
+    
+    .main { max-width: 900px; margin: 0 auto; padding: 24px; }
+    
+    .card { background: var(--bg-secondary); border-radius: var(--radius-lg); border: 1px solid var(--border-light); margin-bottom: 24px; overflow: hidden; }
+    .card-header { padding: 20px 24px; border-bottom: 1px solid var(--border-light); background: var(--neutral-50); }
+    .card-header h3 { font-size: 18px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 10px; }
+    .card-body { padding: 24px; }
+    
+    .users-list { max-height: 200px; overflow-y: auto; border: 1px solid var(--border-light); border-radius: var(--radius-md); margin-bottom: 16px; }
+    .user-item { padding: 12px 16px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background 0.2s; }
+    .user-item:last-child { border-bottom: none; }
+    .user-item:hover { background: var(--neutral-50); }
+    .user-item.selected { background: var(--primary-50); border-left: 3px solid var(--primary-500); }
+    .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary-100); color: var(--primary-600); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
+    .user-info { flex: 1; }
+    .user-name { font-weight: 600; font-size: 14px; }
+    .user-email { font-size: 12px; color: var(--text-tertiary); }
+    .user-check { color: var(--success-500); font-size: 18px; display: none; }
+    .user-item.selected .user-check { display: block; }
+    
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-box { background: var(--neutral-50); border-radius: var(--radius-md); padding: 16px; text-align: center; }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--primary-600); }
+    .stat-label { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+    
+    .history-table { width: 100%; border-collapse: collapse; }
+    .history-table th, .history-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border-light); font-size: 13px; }
+    .history-table th { background: var(--neutral-50); font-weight: 600; color: var(--text-secondary); }
+    .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .status-badge.sent { background: var(--success-100); color: var(--success-600); }
+    .status-badge.pending { background: var(--warning-100); color: var(--warning-500); }
+    .status-badge.failed { background: var(--error-100); color: var(--error-500); }
+    
+    .empty-state { text-align: center; padding: 40px; color: var(--text-tertiary); }
+    .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--text-tertiary); gap: 12px; }
+    .spinner { width: 24px; height: 24px; border: 3px solid var(--border-light); border-top-color: var(--primary-500); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="loginPage" class="login-container">
+    <div class="login-card">
+      <div class="login-logo">Create</div>
+      <p class="login-subtitle">Push Notifications Admin</p>
+      <div id="loginError" class="login-error"></div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="Enter admin email" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Enter password" required>
+        </div>
+        <button type="submit" class="login-btn">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="dashboard" class="dashboard">
+    <header class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <span class="header-logo">Create</span>
+          <span class="header-title">🔔 Push Notifications</span>
+        </div>
+        <div class="header-right">
+          <a href="/admin/analytics" class="btn btn-back">📈 Analytics</a>
+          <button id="logoutBtn" class="btn btn-logout">Logout</button>
+        </div>
+      </div>
+    </header>
+    
+    <main class="main">
+      <!-- Stats -->
+      <div class="stats-row" id="statsRow">
+        <div class="stat-box">
+          <div class="stat-value" id="totalUsers">-</div>
+          <div class="stat-label">Users with Push Tokens</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="totalSent">-</div>
+          <div class="stat-label">Notifications Sent</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="totalRead">-</div>
+          <div class="stat-label">Read</div>
+        </div>
+      </div>
+      
+      <!-- Send Notification -->
+      <div class="card">
+        <div class="card-header">
+          <h3>📤 Send Push Notification</h3>
+        </div>
+        <div class="card-body">
+          <div id="sendMessage" class="message"></div>
+          <form id="sendForm">
+            <div class="form-group">
+              <label>Select User</label>
+              <div class="users-list" id="usersList">
+                <div class="loading"><div class="spinner"></div><span>Loading users...</span></div>
+              </div>
+              <input type="hidden" id="selectedUserId" required>
+            </div>
+            <div class="form-group">
+              <label for="notifType">Notification Type</label>
+              <select id="notifType">
+                <option value="general">General</option>
+                <option value="project_approved">Project Approved</option>
+                <option value="project_rejected">Project Rejected</option>
+                <option value="project_update">Project Update</option>
+                <option value="payment_received">Payment Received</option>
+                <option value="payment_pending">Payment Pending</option>
+                <option value="message">Message</option>
+                <option value="reminder">Reminder</option>
+                <option value="system">System</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="notifTitle">Title</label>
+              <input type="text" id="notifTitle" placeholder="Notification title" required>
+            </div>
+            <div class="form-group">
+              <label for="notifBody">Message</label>
+              <textarea id="notifBody" placeholder="Notification message..." required></textarea>
+            </div>
+            <button type="submit" class="send-btn" id="sendBtn">🚀 Send Notification</button>
+          </form>
+        </div>
+      </div>
+      
+      <!-- Recent Notifications -->
+      <div class="card">
+        <div class="card-header">
+          <h3>📋 Recent Notifications</h3>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div id="historyTable">
+            <div class="loading"><div class="spinner"></div><span>Loading...</span></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API = window.location.origin;
+    let token = localStorage.getItem('analytics_token');
+    let selectedUserId = null;
+    
+    const loginPage = document.getElementById('loginPage');
+    const dashboard = document.getElementById('dashboard');
+    const loginForm = document.getElementById('loginForm');
+    const loginError = document.getElementById('loginError');
+    const sendForm = document.getElementById('sendForm');
+    const sendMessage = document.getElementById('sendMessage');
+    
+    if (token) { showDashboard(); loadData(); }
+    
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginError.classList.remove('show');
+      try {
+        const res = await fetch(API + '/admin/analytics/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value })
+        });
+        const data = await res.json();
+        if (data.success && data.token) {
+          token = data.token;
+          localStorage.setItem('analytics_token', data.token);
+          showDashboard();
+          loadData();
+        } else {
+          loginError.textContent = data.message || 'Invalid credentials';
+          loginError.classList.add('show');
+        }
+      } catch (err) {
+        loginError.textContent = 'Connection error';
+        loginError.classList.add('show');
+      }
+    });
+    
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('analytics_token');
+      token = null;
+      loginPage.style.display = 'flex';
+      dashboard.classList.remove('show');
+    });
+    
+    function showDashboard() {
+      loginPage.style.display = 'none';
+      dashboard.classList.add('show');
+    }
+    
+    async function loadData() {
+      await Promise.all([loadUsers(), loadStats(), loadHistory()]);
+    }
+    
+    async function loadUsers() {
+      try {
+        const res = await fetch(API + '/user/all', { headers: { 'Authorization': 'Bearer ' + token } });
+        const data = await res.json();
+        
+        if (data.success && data.users) {
+          const container = document.getElementById('usersList');
+          if (data.users.length === 0) {
+            container.innerHTML = '<div class="empty-state">No users found</div>';
+            return;
+          }
+          
+          container.innerHTML = data.users.map(u => {
+            const initials = ((u.firstName || '')[0] || '') + ((u.lastName || '')[0] || '') || 'U';
+            return '<div class="user-item" data-id="' + u.uid + '">' +
+              '<div class="user-avatar">' + initials.toUpperCase() + '</div>' +
+              '<div class="user-info"><div class="user-name">' + (u.firstName || '') + ' ' + (u.lastName || '') + '</div>' +
+              '<div class="user-email">' + (u.email || 'No email') + '</div></div>' +
+              '<span class="user-check">✓</span></div>';
+          }).join('');
+          
+          container.querySelectorAll('.user-item').forEach(item => {
+            item.addEventListener('click', () => {
+              container.querySelectorAll('.user-item').forEach(i => i.classList.remove('selected'));
+              item.classList.add('selected');
+              selectedUserId = item.dataset.id;
+              document.getElementById('selectedUserId').value = selectedUserId;
+            });
+          });
+        }
+      } catch (err) {
+        console.error('Load users error:', err);
+      }
+    }
+    
+    async function loadStats() {
+      try {
+        const res = await fetch(API + '/notifications/stats', { headers: { 'Authorization': 'Bearer ' + token } });
+        const data = await res.json();
+        
+        if (data.success && data.stats) {
+          document.getElementById('totalUsers').textContent = data.stats.tokens?.uniqueUsers || 0;
+          const sentCount = Object.values(data.stats.notifications?.byStatus || {}).reduce((a, b) => a + b, 0);
+          document.getElementById('totalSent').textContent = sentCount;
+          document.getElementById('totalRead').textContent = data.stats.notifications?.byStatus?.read || 0;
+        }
+      } catch (err) {
+        console.error('Load stats error:', err);
+      }
+    }
+    
+    async function loadHistory() {
+      try {
+        const container = document.getElementById('historyTable');
+        // This would require a new endpoint to get all notifications
+        // For now, just show a message
+        container.innerHTML = '<div class="empty-state">Send notifications above to see history</div>';
+      } catch (err) {
+        console.error('Load history error:', err);
+      }
+    }
+    
+    sendForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (!selectedUserId) {
+        sendMessage.className = 'message error';
+        sendMessage.textContent = 'Please select a user';
+        return;
+      }
+      
+      const sendBtn = document.getElementById('sendBtn');
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+      sendMessage.className = 'message';
+      sendMessage.style.display = 'none';
+      
+      try {
+        const res = await fetch(API + '/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({
+            userId: selectedUserId,
+            title: document.getElementById('notifTitle').value,
+            body: document.getElementById('notifBody').value,
+            type: document.getElementById('notifType').value
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          sendMessage.className = 'message success';
+          sendMessage.textContent = '✅ Notification sent successfully!' + (data.pushSent ? ' (Push delivered)' : ' (Saved, no push token)');
+          sendForm.reset();
+          document.querySelectorAll('.user-item').forEach(i => i.classList.remove('selected'));
+          selectedUserId = null;
+          loadStats();
+        } else {
+          sendMessage.className = 'message error';
+          sendMessage.textContent = '❌ ' + (data.message || 'Failed to send notification');
+        }
+      } catch (err) {
+        sendMessage.className = 'message error';
+        sendMessage.textContent = '❌ Connection error: ' + err.message;
+      }
+      
+      sendBtn.disabled = false;
+      sendBtn.textContent = '🚀 Send Notification';
+    });
+  </script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html');
+  res.send(notificationsHTML);
+});
+
 // Database Sync Endpoint (one-time use to add missing columns)
 app.get("/sync-db", async (req, res) => {
   try {
