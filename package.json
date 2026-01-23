@@ -7,7 +7,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix"
+    "lint:fix": "eslint src/ --fix",
+    "clear:projects-clients": "node scripts/clear-projects-clients.js"
   },
   "author": "",
   "license": "ISC",

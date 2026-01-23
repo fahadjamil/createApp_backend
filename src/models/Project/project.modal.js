@@ -11,7 +11,8 @@ module.exports = (sequelize, Sequelize) => {
       },
       projectName: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
+        defaultValue: "Untitled Draft",
       },
       projectType: DataTypes.STRING,
       clientName: DataTypes.STRING,
@@ -22,16 +23,8 @@ module.exports = (sequelize, Sequelize) => {
       tags: DataTypes.JSON,
       media: DataTypes.JSON,
 
-      // Contact person / Point of contact
-      pointName: DataTypes.STRING,
-      pointRole: DataTypes.STRING,
-      pointBrand: DataTypes.STRING,
-      pointEmail: DataTypes.STRING,
-      pointMobile: DataTypes.STRING,
-
       // Payment details
       paymentType: DataTypes.STRING,
-      amount: DataTypes.DECIMAL(15, 2),
       dueDate: DataTypes.DATE,
       projectAmount: DataTypes.DECIMAL(15, 2),
       currency: DataTypes.STRING,
@@ -50,6 +43,10 @@ module.exports = (sequelize, Sequelize) => {
 
       // ✅ Additional fields
       projectStatus: DataTypes.STRING,
+      isDraft: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
       contactName: DataTypes.STRING,
       contactEmail: DataTypes.STRING,
       contactNumber: DataTypes.STRING,

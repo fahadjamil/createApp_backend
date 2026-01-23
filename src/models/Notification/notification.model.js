@@ -150,3 +150,4 @@ module.exports = (sequelize, Sequelize) => {
   return Notification;
 };
 
+

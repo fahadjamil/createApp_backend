@@ -92,3 +92,4 @@ module.exports = (sequelize, Sequelize) => {
   return PushToken;
 };
 
+

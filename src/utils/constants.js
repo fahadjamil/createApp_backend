@@ -53,7 +53,6 @@ const PROJECT_STATUS = {
   DELAYED: "Delayed",
   IN_DISPUTE: "In Dispute",
   PAYMENT_DUE: "Payment Due",
-  DRAFT: "Draft",
 };
 
 const PROTECTED_PROJECT_STATUSES = ["signed", "completed"];

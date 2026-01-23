@@ -1,6 +1,5 @@
 const db = require("../models");
 const Project = db.Project;
-const DraftProject = db.DraftProject;
 const Client = db.Client;
 
 const asyncHandler = require("../middlewares/asyncHandler");
@@ -19,16 +18,23 @@ const {
   DISPUTE_PROJECT_FIELDS,
 } = require("../utils/constants");
 
+const normalizeProjectStatus = (body = {}) => {
+  if (!body.projectStatus && body.status) {
+    body.projectStatus = body.status;
+  }
+  delete body.status;
+  return body;
+};
+
 /**
  * Client sync logic (unique by phone + store userId)
- * Accepts both contact* and point* field names from mobile app
+ * Uses contact* field names from mobile app
  */
 const syncClient = async (data) => {
   try {
     logger.debug("Client sync started", { projectId: data.projectId });
 
-    // Support both naming conventions: contactNumber OR pointMobile
-    const phone = data.contactNumber || data.pointMobile;
+    const phone = data.contactNumber;
 
     if (!phone) {
       logger.debug("No phone provided, skipping client sync");
@@ -43,12 +49,12 @@ const syncClient = async (data) => {
     const clientData = {
       fullName: data.clientName || "",
       clientType: data.client || "",
-      company: data.contactBrand || data.pointBrand || "",
-      email: data.contactEmail || data.pointEmail || "",
+      company: data.contactBrand || "",
+      email: data.contactEmail || "",
       phone: phone,
       address: "",
-      contactPersonName: data.contactName || data.pointName || "",
-      contactPersonRole: data.contactRole || data.pointRole || "",
+      contactPersonName: data.contactName || "",
+      contactPersonRole: data.contactRole || "",
       projectId: data.projectId,
       userId: data.userId,
     };
@@ -80,6 +86,7 @@ const syncClient = async (data) => {
  */
 exports.Newproject = asyncHandler(async (req, res) => {
   logger.info("Create/Update project request");
+  normalizeProjectStatus(req.body);
 
   const requiredFields = [
     "projectName",
@@ -105,14 +112,6 @@ exports.Newproject = asyncHandler(async (req, res) => {
     throw new BadRequestError(MESSAGES.ERROR.REQUIRED("userId"));
   }
 
-  // Validate projectAmount is greater than zero when completing a draft project
-  if (req.body.dpid) {
-    const projectAmount = parseFloat(req.body.projectAmount);
-    if (!projectAmount || projectAmount <= 0) {
-      throw new BadRequestError("Project amount must be greater than zero to complete the project");
-    }
-  }
-
   let project;
 
   if (req.body.pid) {
@@ -123,27 +122,29 @@ exports.Newproject = asyncHandler(async (req, res) => {
       throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Project"));
     }
 
+    const isCompletingDraft = project.isDraft && req.body.isDraft === false;
+    if (isCompletingDraft) {
+      const projectAmount = parseFloat(req.body.projectAmount);
+      if (!projectAmount || projectAmount <= 0) {
+        throw new BadRequestError("Project amount must be greater than zero to complete the project");
+      }
+    }
+
     await project.update({
       ...req.body,
       userId: req.body.userId,
+      isDraft: false,
     });
 
-    // Remove from draft if exists
-    await DraftProject.destroy({ where: { dpid: req.body.pid } });
     logger.info("Project updated", { projectId: project.pid });
   } else {
     // Create new project
     project = await Project.create({
       ...req.body,
       userId: req.body.userId,
+      isDraft: false,
     });
 
-    // Remove draft if exists
-    if (req.body.dpid || req.body.pid) {
-      await DraftProject.destroy({
-        where: { dpid: req.body.dpid || req.body.pid },
-      });
-    }
     logger.info("Project created", { projectId: project.pid });
   }
 
@@ -171,7 +172,7 @@ exports.allprojects = asyncHandler(async (req, res) => {
   }
 
   const projects = await Project.findAll({
-    where: { userId },
+    where: { userId, isDraft: false },
     order: [["createdAt", "DESC"]],
   });
 
@@ -201,12 +202,13 @@ exports.uploadProjectPictures = asyncHandler(async (req, res) => {
       throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Project"));
     }
   } else {
+    const status = req.body.projectStatus || req.body.status || "Discussion";
     project = await Project.create({
       userId: req.body.userId || null,
       projectName: req.body.projectName || "Untitled Project",
       projectType: req.body.projectType || "General",
       client: req.body.client || "Unknown",
-      status: req.body.status || "Pending",
+      projectStatus: status,
       startDate: new Date(),
       endDate: new Date(),
       media: JSON.stringify([]),
@@ -267,6 +269,7 @@ exports.getProjectById = asyncHandler(async (req, res) => {
  */
 exports.updateProject = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  normalizeProjectStatus(req.body);
 
   const project = await Project.findByPk(id);
   if (!project) {
@@ -274,7 +277,7 @@ exports.updateProject = asyncHandler(async (req, res) => {
   }
 
   // Check current project status
-  const currentStatus = (project.projectStatus || project.status || "").toLowerCase();
+  const currentStatus = (project.projectStatus || "").toLowerCase();
   const isDelayed = currentStatus === "delayed";
   const isInDispute = currentStatus === "in dispute";
 
@@ -317,6 +320,7 @@ exports.updateProject = asyncHandler(async (req, res) => {
  */
 exports.DraftProject = asyncHandler(async (req, res) => {
   logger.info("Create/Update draft project");
+  normalizeProjectStatus(req.body);
 
   const { pid, userId, startDate, endDate, dueDate, paymentStartDate, ...rest } = req.body;
 
@@ -332,20 +336,21 @@ exports.DraftProject = asyncHandler(async (req, res) => {
   };
 
   const payload = {
-    dpid: pid,
+    pid,
     userId,
     ...rest,
+    isDraft: true,
     startDate: parseDateOrNull(startDate),
     endDate: parseDateOrNull(endDate),
     dueDate: parseDateOrNull(dueDate),
     paymentStartDate: parseDateOrNull(paymentStartDate),
   };
 
-  const [draft, created] = await DraftProject.upsert(payload, {
+  const [draft, created] = await Project.upsert(payload, {
     returning: true,
   });
 
-  logger.info(created ? "Draft created" : "Draft updated", { draftId: draft.dpid });
+  logger.info(created ? "Draft created" : "Draft updated", { draftId: draft.pid });
 
   res.status(created ? HTTP_STATUS.CREATED : HTTP_STATUS.OK).json({
     success: true,
@@ -366,8 +371,8 @@ exports.allDraftprojects = asyncHandler(async (req, res) => {
     throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
   }
 
-  const draftProjects = await DraftProject.findAll({
-    where: { userId },
+  const draftProjects = await Project.findAll({
+    where: { userId, isDraft: true },
     order: [["createdAt", "DESC"]],
   });
 
@@ -396,8 +401,8 @@ exports.getSingleDraftProject = asyncHandler(async (req, res) => {
     throw new BadRequestError(MESSAGES.ERROR.REQUIRED("User ID"));
   }
 
-  const draftProject = await DraftProject.findOne({
-    where: { dpid: id, userId },
+  const draftProject = await Project.findOne({
+    where: { pid: id, userId, isDraft: true },
   });
 
   if (!draftProject) {
@@ -430,7 +435,7 @@ exports.deleteProject = asyncHandler(async (req, res) => {
   }
 
   // Prevent deletion of protected projects
-  const projectStatus = (project.projectStatus || project.status || "").toLowerCase();
+  const projectStatus = (project.projectStatus || "").toLowerCase();
 
   if (PROTECTED_PROJECT_STATUSES.includes(projectStatus)) {
     throw new ForbiddenError("Projects that are signed or completed cannot be deleted");
@@ -452,13 +457,14 @@ exports.deleteProject = asyncHandler(async (req, res) => {
  */
 exports.updateDraftProject = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  normalizeProjectStatus(req.body);
   const { startDate, endDate, dueDate, paymentStartDate, ...rest } = req.body;
 
   if (!id) {
     throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Draft project ID"));
   }
 
-  const draftProject = await DraftProject.findOne({ where: { dpid: id } });
+  const draftProject = await Project.findOne({ where: { pid: id, isDraft: true } });
 
   if (!draftProject) {
     throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Draft project"));
@@ -473,6 +479,7 @@ exports.updateDraftProject = asyncHandler(async (req, res) => {
 
   const updates = {
     ...rest,
+    isDraft: true,
     startDate: parseDateOrNull(startDate),
     endDate: parseDateOrNull(endDate),
     dueDate: parseDateOrNull(dueDate),
@@ -501,7 +508,7 @@ exports.deleteDraftProject = asyncHandler(async (req, res) => {
     throw new BadRequestError(MESSAGES.ERROR.REQUIRED("Draft project ID"));
   }
 
-  const draftProject = await DraftProject.findOne({ where: { dpid: id } });
+  const draftProject = await Project.findOne({ where: { pid: id, isDraft: true } });
 
   if (!draftProject) {
     throw new NotFoundError(MESSAGES.ERROR.NOT_FOUND("Draft project"));
