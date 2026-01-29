@@ -164,7 +164,17 @@ exports.signin = asyncHandler(async (req, res) => {
       db.Sequelize.fn('LOWER', db.Sequelize.col('email')),
       email.trim().toLowerCase()
     ),
-    attributes: ['uid', 'email', 'password', 'role', 'full_name', 'firstName', 'lastName', 'phone']
+    attributes: [
+      'uid',
+      'email',
+      'password',
+      'role',
+      'full_name',
+      'firstName',
+      'lastName',
+      'phone',
+      'searchTerm',
+    ]
   });
   
   logger.info("Signin attempt", { 
@@ -211,8 +221,12 @@ exports.signin = asyncHandler(async (req, res) => {
     user: {
       uid: user.uid,
       full_name: user.full_name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
       email: user.email,
       role: user.role,
+      searchTerm: user.searchTerm,
     },
   });
 });
